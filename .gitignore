@@ -1,0 +1,37 @@
+
+# Flutter dan Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# File sistem
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# File rahasia dan konfigurasi lokal
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+secrets.json
+credentials.json
+service-account*.json
+
+# Log dan file sementara
+*.log
+*.tmp
+
+# File konfigurasi lokal Android
+android/local.properties
