@@ -55,7 +55,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
   DateTime? _eventDate(Map<String, dynamic> event) {
     final raw = _value(
       event,
-      ['date', 'event_date', 'tanggal'],
+      ['event_date', 'date', 'tanggal'],
       fallback: '',
     );
 
@@ -67,9 +67,18 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     if (date == null) return 'Tanggal belum tersedia';
 
     const months = [
-      'Januari', 'Februari', 'Maret', 'April',
-      'Mei', 'Juni', 'Juli', 'Agustus',
-      'September', 'Oktober', 'November', 'Desember',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year} '
@@ -124,21 +133,16 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
       barrierDismissible: false,
       builder: (_) => _EventFormDialog(
         event: event,
-        formatRupiah: _formatRupiah,
       ),
     );
 
     if (!mounted) return;
 
     if (saved == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            event == null
-                ? 'Event berhasil ditambahkan.'
-                : 'Event berhasil diperbarui.',
-          ),
-        ),
+      _message(
+        event == null
+            ? 'Event berhasil ditambahkan.'
+            : 'Event berhasil diperbarui.',
       );
 
       await _load();
@@ -165,7 +169,8 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
         title: const Text('Hapus event?'),
         content: Text(
           'Event "$title" akan dihapus. '
-          'Tindakan ini mungkin ditolak jika event sudah memiliki pesanan.',
+          'Jika event sudah memiliki pesanan, gunakan pembatalan '
+          'event agar riwayat pesanan tetap tersimpan.',
         ),
         actions: [
           TextButton(
@@ -216,20 +221,26 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
   Widget _buildEventCard(Map<String, dynamic> event) {
     final id = _toInt(event['id'] ?? event['event_id']);
     final title = _value(event, ['title', 'name', 'nama_event']);
+
     final location = _value(
       event,
       ['location', 'venue', 'lokasi'],
       fallback: 'Lokasi belum tersedia',
     );
+
     final image = _value(
       event,
       ['image_url', 'poster_url', 'image', 'gambar'],
       fallback: '',
     );
+
     final date = _eventDate(event);
+
     final price = _toNum(
       event['price'] ?? event['ticket_price'] ?? event['harga'],
     );
+
+    final isCancelled = event['is_cancelled'] == true;
 
     return Card(
       elevation: 0,
@@ -289,6 +300,17 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                           fontSize: 16,
                         ),
                       ),
+                      if (isCancelled) ...[
+                        const SizedBox(height: 5),
+                        const Text(
+                          'EVENT DIBATALKAN',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 7),
                       _InfoLine(
                         icon: Icons.location_on_outlined,
@@ -317,7 +339,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: id == null
+                    onPressed: id == null || isCancelled
                         ? null
                         : () => _openForm(event: event),
                     icon: const Icon(Icons.edit_outlined, size: 18),
@@ -363,7 +385,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
           ),
         ],
       ),
-      drawer: const AdminDrawerPage(currentRoute: '/admin/events'),
+      drawer: const AdminDrawerPage(
+        currentRoute: '/admin/events',
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
         backgroundColor: primary,
@@ -372,7 +396,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
         label: const Text('Tambah Event'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
           : _error != null
               ? Center(
                   child: Padding(
@@ -444,13 +470,16 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                       onRefresh: _load,
                       child: ListView.separated(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                        padding: const EdgeInsets.fromLTRB(
+                          16, 16, 16, 100,
+                        ),
                         itemCount: _events.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 12),
                         itemBuilder: (context, index) {
-                          final event =
-                              Map<String, dynamic>.from(_events[index] as Map);
+                          final event = Map<String, dynamic>.from(
+                            _events[index],
+                          );
                           return _buildEventCard(event);
                         },
                       ),
@@ -461,11 +490,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
 class _EventFormDialog extends StatefulWidget {
   final Map<String, dynamic>? event;
-  final String Function(num) formatRupiah;
 
   const _EventFormDialog({
     required this.event,
-    required this.formatRupiah,
   });
 
   @override
@@ -497,18 +524,27 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     _titleController = TextEditingController(
       text: _read(event, ['title', 'name', 'nama_event']),
     );
+
     _descriptionController = TextEditingController(
       text: _read(event, ['description', 'deskripsi']),
     );
+
     _locationController = TextEditingController(
       text: _read(event, ['location', 'venue', 'lokasi']),
     );
+
     _imageController = TextEditingController(
       text: _read(event, ['image_url', 'poster_url', 'image', 'gambar']),
     );
+
     _priceController = TextEditingController(
-      text: _read(event, ['price', 'ticket_price', 'harga'], fallback: '0'),
+      text: _read(
+        event,
+        ['price', 'ticket_price', 'harga'],
+        fallback: '0',
+      ),
     );
+
     _stockController = TextEditingController(
       text: _read(
         event,
@@ -519,10 +555,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     final rawDate = _read(
       event,
-      ['date', 'event_date', 'tanggal'],
+      ['event_date', 'date', 'tanggal'],
     );
 
     final parsedDate = DateTime.tryParse(rawDate);
+
     if (parsedDate != null) {
       _selectedDate = DateTime(
         parsedDate.year,
@@ -567,9 +604,18 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     if (date == null) return 'Pilih tanggal event';
 
     const months = [
-      'Januari', 'Februari', 'Maret', 'April',
-      'Mei', 'Juni', 'Juli', 'Agustus',
-      'September', 'Oktober', 'November', 'Desember',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year}';
@@ -578,7 +624,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
     final initial = _selectedDate ?? today.add(const Duration(days: 1));
 
     final picked = await showDatePicker(
@@ -625,6 +670,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     final parsed = num.tryParse((value ?? '').trim());
 
     if (parsed == null) return '$label harus berupa angka.';
+
     if (parsed < 0 || (!allowZero && parsed == 0)) {
       return allowZero
           ? '$label tidak boleh negatif.'
@@ -651,6 +697,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     }
 
     final now = DateTime.now();
+
     final chosenDateTime = DateTime(
       _selectedDate!.year,
       _selectedDate!.month,
@@ -659,8 +706,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       _selectedTime!.minute,
     );
 
-    // Event baru harus berada di masa depan.
-    // Event lama boleh diedit tanpa memaksa tanggalnya ke masa depan.
     if (!_isEditing && !chosenDateTime.isAfter(now)) {
       _message('Tanggal dan waktu event baru harus di masa depan.');
       return;
@@ -675,6 +720,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     }
 
     final eventId = widget.event?['id'] ?? widget.event?['event_id'];
+
     final id = eventId is int
         ? eventId
         : int.tryParse(eventId?.toString() ?? '');
@@ -684,8 +730,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       return;
     }
 
-    // Simpan tanggal dan waktu yang dipilih sebagai ISO 8601.
-    // Backend menerima string tanggal/waktu ini melalui field "date".
+    // FIX: backend menggunakan field event_date, bukan date.
     final dateIso = chosenDateTime.toIso8601String();
 
     final payload = <String, dynamic>{
@@ -695,7 +740,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       'image_url': _imageController.text.trim().isEmpty
           ? null
           : _imageController.text.trim(),
-      'date': dateIso,
+      'event_date': dateIso,
       'price': price,
       'available_tickets': stock,
     };
@@ -710,6 +755,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       }
 
       if (!mounted) return;
+
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -719,7 +765,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         '${e.toString().replaceFirst('Exception: ', '')}',
       );
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+      }
     }
   }
 
@@ -800,9 +848,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   hint: 'https://contoh.com/poster.jpg',
                   validator: (value) {
                     final text = (value ?? '').trim();
+
                     if (text.isEmpty) return null;
 
                     final uri = Uri.tryParse(text);
+
                     if (uri == null ||
                         !uri.hasScheme ||
                         !(uri.scheme == 'https' || uri.scheme == 'http') ||
@@ -872,9 +922,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Harga dan stok dasar hanya digunakan jika backend '
+                  'Harga dan stok dasar digunakan jika backend '
                   'masih memerlukan field tersebut. Harga dan stok '
-                  'VVIP, VIP, dan Standard dikelola melalui kelas tiket.',
+                  'kelas tiket dikelola melalui kelas tiket.',
                   style: TextStyle(
                     color: Colors.black54,
                     fontSize: 12,
@@ -888,7 +938,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          onPressed: _saving
+              ? null
+              : () => Navigator.pop(context, false),
           child: const Text('Batal'),
         ),
         FilledButton.icon(
@@ -900,7 +952,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.save_outlined),
-          label: Text(_saving ? 'Menyimpan...' : 'Simpan'),
+          label: Text(
+            _saving ? 'Menyimpan...' : 'Simpan',
+          ),
         ),
       ],
     );
@@ -921,7 +975,11 @@ class _InfoLine extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF77778A)),
+        Icon(
+          icon,
+          size: 16,
+          color: const Color(0xFF77778A),
+        ),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
