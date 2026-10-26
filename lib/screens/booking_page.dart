@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../api_service.dart';
 import 'payment_page.dart';
@@ -21,6 +20,7 @@ class _BookingPageState extends State<BookingPage> {
   String? errorMessage;
 
   static const Color primaryColor = Color(0xFF5B50E8);
+  static const int maxTicketsPerOrder = 10;
 
   int get eventId {
     final value = widget.event['id'];
@@ -28,7 +28,20 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   num get ticketPrice {
-    return num.tryParse('${widget.event['price'] ?? 0}') ?? 0;
+    final value = widget.event['price'];
+    return num.tryParse('$value') ?? 0;
+  }
+
+  int get availableTickets {
+    final value = widget.event['available_tickets'];
+    return value is int ? value : int.tryParse('$value') ?? 0;
+  }
+
+  int get maxQuantity {
+    if (availableTickets <= 0) return 0;
+    return availableTickets < maxTicketsPerOrder
+        ? availableTickets
+        : maxTicketsPerOrder;
   }
 
   num get totalPrice => ticketPrice * quantity;
@@ -37,7 +50,7 @@ class _BookingPageState extends State<BookingPage> {
     final digits = value.round().toString();
     final formatted = digits.replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (match) => '.',
+      (_) => '.',
     );
     return 'Rp $formatted';
   }
@@ -46,22 +59,23 @@ class _BookingPageState extends State<BookingPage> {
     if (submitting) return;
 
     if (eventId <= 0) {
-      setState(() {
-        errorMessage = 'ID event tidak valid.';
-      });
+      setState(() => errorMessage = 'ID event tidak valid.');
       return;
     }
 
-    if (ticketPrice <= 0) {
-      setState(() {
-        errorMessage = 'Harga tiket tidak valid.';
-      });
+    if (ticketPrice < 0) {
+      setState(() => errorMessage = 'Harga tiket tidak valid.');
       return;
     }
 
-    if (quantity < 1 || quantity > 10) {
+    if (availableTickets <= 0) {
+      setState(() => errorMessage = 'Maaf, tiket event ini sudah habis.');
+      return;
+    }
+
+    if (quantity < 1 || quantity > maxQuantity) {
       setState(() {
-        errorMessage = 'Jumlah tiket harus antara 1 sampai 10.';
+        errorMessage = 'Jumlah tiket melebihi stok yang tersedia.';
       });
       return;
     }
@@ -79,37 +93,44 @@ class _BookingPageState extends State<BookingPage> {
 
       if (!mounted) return;
 
-      final orderIdValue = result['id'] ?? result['order_id'];
-
-      final orderId = orderIdValue is int
-          ? orderIdValue
-          : int.tryParse('$orderIdValue') ?? 0;
+      final rawOrderId = result['id'] ?? result['order_id'];
+      final orderId = rawOrderId is int
+          ? rawOrderId
+          : int.tryParse('$rawOrderId') ?? 0;
 
       if (orderId <= 0) {
         setState(() {
           submitting = false;
-          errorMessage =
-              'ID pesanan tidak ditemukan pada respons backend. '
-              'Periksa respons endpoint /orders/.';
+          errorMessage = 'ID pesanan tidak ditemukan dari backend.';
+        });
+        return;
+      }
+
+      final rawTotal = result['total_price'];
+      final backendTotal = rawTotal == null
+          ? totalPrice.toDouble()
+          : num.tryParse('$rawTotal')?.toDouble();
+
+      if (backendTotal == null || backendTotal < 0) {
+        setState(() {
+          submitting = false;
+          errorMessage = 'Total pesanan dari backend tidak valid.';
         });
         return;
       }
 
       final selectedQuantity = quantity;
-      final selectedTotalPrice = totalPrice.toDouble();
       final selectedTitle =
           widget.event['title']?.toString() ?? 'Tanpa judul';
 
-      setState(() {
-        submitting = false;
-      });
+      setState(() => submitting = false);
 
       await Navigator.push<void>(
         context,
         MaterialPageRoute(
           builder: (_) => PaymentPage(
             orderId: orderId,
-            totalPrice: selectedTotalPrice,
+            totalPrice: backendTotal,
             eventTitle: selectedTitle,
             quantity: selectedQuantity,
           ),
@@ -126,14 +147,12 @@ class _BookingPageState extends State<BookingPage> {
       });
     } finally {
       if (mounted && submitting) {
-        setState(() {
-          submitting = false;
-        });
+        setState(() => submitting = false);
       }
     }
   }
 
-  Widget _buildSummaryRow(String label, String value) {
+  Widget buildSummaryRow(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -156,14 +175,13 @@ class _BookingPageState extends State<BookingPage> {
   @override
   Widget build(BuildContext context) {
     final title = widget.event['title']?.toString() ?? 'Tanpa judul';
-
     final location =
-        widget.event['location']?.toString() ??
-        'Lokasi belum tersedia';
-
+        widget.event['location']?.toString() ?? 'Lokasi belum tersedia';
     final description =
         widget.event['description']?.toString() ??
         'Tidak ada deskripsi event.';
+    final imageUrl = widget.event['image_url']?.toString() ?? '';
+    final soldOut = availableTickets <= 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7FC),
@@ -193,7 +211,6 @@ class _BookingPageState extends State<BookingPage> {
               ),
             ),
             const SizedBox(height: 24),
-
             Card(
               clipBehavior: Clip.antiAlias,
               child: Padding(
@@ -201,17 +218,19 @@ class _BookingPageState extends State<BookingPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      height: 120,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFECEAFF),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.event_available,
-                        size: 64,
-                        color: primaryColor,
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        height: 160,
+                        width: double.infinity,
+                        child: imageUrl.isNotEmpty
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const EventImagePlaceholder(),
+                              )
+                            : const EventImagePlaceholder(),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -243,20 +262,30 @@ class _BookingPageState extends State<BookingPage> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      '${rupiah(ticketPrice)} / tiket',
+                      ticketPrice == 0
+                          ? 'Gratis'
+                          : '${rupiah(ticketPrice)} / tiket',
                       style: const TextStyle(
                         color: primaryColor,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      soldOut
+                          ? 'Tiket habis'
+                          : 'Tersedia $availableTickets tiket',
+                      style: TextStyle(
+                        color: soldOut ? Colors.red : Colors.green.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
             const Text(
               'Jumlah Tiket',
               style: TextStyle(
@@ -265,7 +294,6 @@ class _BookingPageState extends State<BookingPage> {
               ),
             ),
             const SizedBox(height: 12),
-
             Card(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -275,24 +303,17 @@ class _BookingPageState extends State<BookingPage> {
                 child: Row(
                   children: [
                     const Expanded(
-                      child: Text(
-                        'Tiket',
-                        style: TextStyle(fontSize: 16),
-                      ),
+                      child: Text('Tiket', style: TextStyle(fontSize: 16)),
                     ),
                     IconButton(
                       tooltip: 'Kurangi tiket',
                       onPressed: submitting || quantity <= 1
                           ? null
-                          : () {
-                              setState(() {
+                          : () => setState(() {
                                 quantity--;
                                 errorMessage = null;
-                              });
-                            },
-                      icon: const Icon(
-                        Icons.remove_circle_outline,
-                      ),
+                              }),
+                      icon: const Icon(Icons.remove_circle_outline),
                     ),
                     SizedBox(
                       width: 36,
@@ -307,40 +328,33 @@ class _BookingPageState extends State<BookingPage> {
                     ),
                     IconButton(
                       tooltip: 'Tambah tiket',
-                      onPressed: submitting || quantity >= 10
+                      onPressed: submitting ||
+                              quantity >= maxQuantity ||
+                              soldOut
                           ? null
-                          : () {
-                              setState(() {
+                          : () => setState(() {
                                 quantity++;
                                 errorMessage = null;
-                              });
-                            },
-                      icon: const Icon(
-                        Icons.add_circle_outline,
-                      ),
+                              }),
+                      icon: const Icon(Icons.add_circle_outline),
                     ),
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
             Card(
               color: const Color(0xFFF3F1FF),
               child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
-                    _buildSummaryRow(
+                    buildSummaryRow(
                       'Harga per tiket',
-                      rupiah(ticketPrice),
+                      ticketPrice == 0 ? 'Gratis' : rupiah(ticketPrice),
                     ),
                     const SizedBox(height: 12),
-                    _buildSummaryRow(
-                      'Jumlah tiket',
-                      '$quantity tiket',
-                    ),
+                    buildSummaryRow('Jumlah tiket', '$quantity tiket'),
                     const Divider(height: 28),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -368,7 +382,6 @@ class _BookingPageState extends State<BookingPage> {
                 ),
               ),
             ),
-
             if (errorMessage != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -376,9 +389,7 @@ class _BookingPageState extends State<BookingPage> {
                 decoration: BoxDecoration(
                   color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Colors.red.shade200,
-                  ),
+                  border: Border.all(color: Colors.red.shade200),
                 ),
                 child: Text(
                   errorMessage!,
@@ -386,13 +397,11 @@ class _BookingPageState extends State<BookingPage> {
                 ),
               ),
             ],
-
             const SizedBox(height: 24),
-
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: submitting ? null : createBooking,
+                onPressed: submitting || soldOut ? null : createBooking,
                 icon: submitting
                     ? const SizedBox(
                         width: 20,
@@ -402,13 +411,13 @@ class _BookingPageState extends State<BookingPage> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(
-                        Icons.confirmation_number_outlined,
-                      ),
+                    : const Icon(Icons.confirmation_number_outlined),
                 label: Text(
                   submitting
                       ? 'Memproses Pesanan...'
-                      : 'Buat Pesanan',
+                      : soldOut
+                          ? 'Tiket Habis'
+                          : 'Buat Pesanan',
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
@@ -419,6 +428,23 @@ class _BookingPageState extends State<BookingPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class EventImagePlaceholder extends StatelessWidget {
+  const EventImagePlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFECEAFF),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.event_available,
+        size: 64,
+        color: Color(0xFF5B50E8),
       ),
     );
   }

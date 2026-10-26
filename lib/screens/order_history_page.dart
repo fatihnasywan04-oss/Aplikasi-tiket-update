@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../api_service.dart';
@@ -44,16 +43,23 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }) {
     for (final key in keys) {
       final value = item[key];
-
       if (value != null && value.toString().isNotEmpty) {
         return value;
       }
     }
-
     return fallback;
   }
 
+  String readableError(Object e) {
+    return e.toString().replaceFirst(
+      RegExp(r'^Exception:\s*'),
+      '',
+    );
+  }
+
   Future<void> loadOrders() async {
+    if (loading && orders.isNotEmpty) return;
+
     if (mounted) {
       setState(() {
         loading = true;
@@ -74,22 +80,18 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       if (!mounted) return;
 
       setState(() {
-        error = e.toString().replaceFirst('Exception: ', '');
+        error = readableError(e);
         loading = false;
       });
     }
   }
 
   String titleOf(Map<String, dynamic> item) {
-    final name = pick(
-      item,
-      ['event_title', 'event_name', 'title'],
-    );
+    final name = pick(item, ['event_title', 'event_name', 'title']);
 
     if (name != null) return name.toString();
 
     final event = item['event'];
-
     if (event is Map) {
       return (event['title'] ?? event['name'] ?? 'Event').toString();
     }
@@ -99,11 +101,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   String money(dynamic value) {
     final digits = numberValue(value).round().toString();
-
-    return 'Rp ${digits.replaceAllMapped(
+    final formatted = digits.replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (match) => '.',
-    )}';
+      (_) => '.',
+    );
+    return 'Rp $formatted';
   }
 
   String dateText(dynamic value) {
@@ -126,7 +128,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       item,
       ['status', 'order_status'],
       fallback: 'pending',
-    )}'.toLowerCase();
+    )}'.toLowerCase().trim();
   }
 
   String statusLabel(String status) {
@@ -136,7 +138,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       case 'paid':
         return 'Sudah Dibayar';
       case 'success':
-        return 'Berhasil';
       case 'completed':
         return 'Selesai';
       case 'cancelled':
@@ -145,7 +146,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       case 'failed':
         return 'Gagal';
       default:
-        return status;
+        return status.isEmpty ? 'Tidak diketahui' : status;
     }
   }
 
@@ -182,7 +183,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       return;
     }
 
-    await Navigator.push(
+    await Navigator.push<void>(
       context,
       MaterialPageRoute(
         builder: (_) => OrderDetailPage(orderId: id),
@@ -200,36 +201,54 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       return;
     }
 
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentPage(
-          orderId: id,
-          totalPrice: numberValue(
-            pick(
-              item,
-              ['total_price', 'total_amount', 'total', 'amount'],
-              fallback: 0,
+    if (statusOf(item) != 'pending') {
+      showMessage('Hanya pesanan yang menunggu pembayaran yang dapat dibayar.');
+      await loadOrders();
+      return;
+    }
+
+    if (processingOrders.contains(id)) return;
+
+    setState(() => processingOrders.add(id));
+
+    try {
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentPage(
+            orderId: id,
+            totalPrice: numberValue(
+              pick(
+                item,
+                ['total_price', 'total_amount', 'total', 'amount'],
+                fallback: 0,
+              ),
             ),
-          ),
-          eventTitle: titleOf(item),
-          quantity: intValue(
-            pick(
-              item,
-              ['quantity', 'ticket_quantity'],
-              fallback: 1,
+            eventTitle: titleOf(item),
+            quantity: intValue(
+              pick(
+                item,
+                ['quantity', 'ticket_quantity'],
+                fallback: 1,
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    await loadOrders();
+      await loadOrders();
 
-    if (result == true && mounted) {
-      showMessage('Riwayat pesanan diperbarui.');
+      if (result == true && mounted) {
+        showMessage('Pembayaran dikonfirmasi. Riwayat telah diperbarui.');
+      }
+    } catch (e) {
+      if (mounted) showMessage(readableError(e));
+    } finally {
+      if (mounted) {
+        setState(() => processingOrders.remove(id));
+      }
     }
   }
 
@@ -241,44 +260,42 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       return;
     }
 
+    if (statusOf(item) != 'pending') {
+      showMessage('Hanya pesanan pending yang dapat dibatalkan.');
+      await loadOrders();
+      return;
+    }
+
     if (processingOrders.contains(id)) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Batalkan Pesanan?'),
-          content: Text(
-            'Pesanan "${titleOf(item)}" akan dibatalkan. '
-            'Pesanan yang dibatalkan tidak dapat dibayar lagi.',
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Batalkan Pesanan?'),
+        content: Text(
+          'Pesanan "${titleOf(item)}" akan dibatalkan. '
+          'Pesanan yang dibatalkan tidak dapat dibayar lagi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Kembali'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
-              child: const Text('Kembali'),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
             ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Ya, Batalkan'),
-            ),
-          ],
-        );
-      },
+            child: const Text('Ya, Batalkan'),
+          ),
+        ],
+      ),
     );
 
     if (confirmed != true || !mounted) return;
 
-    setState(() {
-      processingOrders.add(id);
-    });
+    setState(() => processingOrders.add(id));
 
     try {
       await ApiService.cancelOrder(id);
@@ -290,40 +307,56 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     } catch (e) {
       if (!mounted) return;
 
-      showMessage(
-        e.toString().replaceFirst('Exception: ', ''),
-      );
-
+      showMessage(readableError(e));
       await loadOrders();
     } finally {
       if (mounted) {
-        setState(() {
-          processingOrders.remove(id);
-        });
+        setState(() => processingOrders.remove(id));
       }
     }
   }
 
-  Widget orderCard(Map<String, dynamic> item) {
-    final id = intValue(item['id'] ?? item['order_id']);
-
-    final quantity = intValue(
-      pick(
-        item,
-        ['quantity', 'ticket_quantity'],
-        fallback: 0,
+  Widget detailRow(
+    String label,
+    String value, {
+    bool bold = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
 
+  Widget orderCard(Map<String, dynamic> item) {
+    final id = intValue(item['id'] ?? item['order_id']);
+    final quantity = intValue(
+      pick(item, ['quantity', 'ticket_quantity'], fallback: 0),
+    );
     final total = pick(
       item,
       ['total_price', 'total_amount', 'total', 'amount'],
       fallback: 0,
     );
-
     final date = pick(item, ['created_at', 'order_date']);
     final status = statusOf(item);
-
     final canPay = status == 'pending';
     final isProcessing = processingOrders.contains(id);
 
@@ -401,29 +434,21 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             detailRow('Tanggal', dateText(date)),
             detailRow('Total', money(total), bold: true),
             const SizedBox(height: 10),
-
-            // Tombol Detail.
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: isProcessing
-                    ? null
-                    : () => openDetail(item),
+                onPressed: isProcessing ? null : () => openDetail(item),
                 icon: const Icon(Icons.receipt_long_outlined),
                 label: const Text('Detail'),
               ),
             ),
-
-            // Tombol Bayar dan Batalkan hanya untuk pending.
             if (canPay) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: isProcessing
-                          ? null
-                          : () => openPayment(item),
+                      onPressed: isProcessing ? null : () => openPayment(item),
                       icon: const Icon(Icons.payment),
                       label: const Text('Bayar'),
                       style: FilledButton.styleFrom(
@@ -435,9 +460,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: isProcessing
-                          ? null
-                          : () => cancelOrder(item),
+                      onPressed: isProcessing ? null : () => cancelOrder(item),
                       icon: isProcessing
                           ? const SizedBox(
                               width: 16,
@@ -460,35 +483,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             ],
           ],
         ),
-      ),
-    );
-  }
-
-  Widget detailRow(
-    String label,
-    String value, {
-    bool bold = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.black54),
-            ),
-          ),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: TextStyle(
-                fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -596,8 +590,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  if (loading)
-                    const LinearProgressIndicator(),
+                  if (loading) const LinearProgressIndicator(),
                   if (error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),

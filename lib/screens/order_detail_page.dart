@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -33,19 +32,20 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   }
 
   Future<void> loadDetail() async {
+    if (!mounted) return;
+
     setState(() {
       loading = true;
       error = null;
     });
 
     try {
-      final result =
-          await ApiService.getOrderDetail(widget.orderId);
+      final result = await ApiService.getOrderDetail(widget.orderId);
 
       if (!mounted) return;
 
       setState(() {
-        order = result;
+        order = Map<String, dynamic>.from(result);
         loading = false;
       });
     } catch (e) {
@@ -62,7 +62,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     for (final key in keys) {
       final result = order?[key];
 
-      if (result != null && result.toString().isNotEmpty) {
+      if (result != null && result.toString().trim().isNotEmpty) {
         return result;
       }
     }
@@ -80,24 +80,27 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final payments = order?['payments'];
 
     if (payments is List && payments.isNotEmpty) {
-      final successful = payments.where((item) {
-        if (item is! Map) return false;
+      final validPayments = payments.whereType<Map>().toList();
 
+      if (validPayments.isEmpty) return null;
+
+      // Utamakan pembayaran yang sudah berhasil.
+      for (final item in validPayments) {
         final paymentStatus =
             '${item['payment_status'] ?? ''}'.toLowerCase();
 
-        return paymentStatus == 'success' ||
-            paymentStatus == 'paid';
-      }).toList();
-
-      final selected =
-          successful.isNotEmpty ? successful.first : payments.first;
-
-      if (selected is Map) {
-        return Map<String, dynamic>.from(selected);
+        if (paymentStatus == 'success' ||
+            paymentStatus == 'paid' ||
+            paymentStatus == 'completed') {
+          return Map<String, dynamic>.from(item);
+        }
       }
+
+      return Map<String, dynamic>.from(validPayments.first);
     }
 
+    // Mendukung respons API yang meletakkan field pembayaran
+    // langsung pada objek pesanan.
     if (order?['payment_method'] != null ||
         order?['transaction_id'] != null ||
         order?['paid_at'] != null ||
@@ -117,7 +120,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     for (final key in keys) {
       final result = data?[key];
 
-      if (result != null && result.toString().isNotEmpty) {
+      if (result != null && result.toString().trim().isNotEmpty) {
         return result;
       }
     }
@@ -133,17 +136,15 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final event = order?['event'];
 
     if (event is Map) {
-      return (event['title'] ?? event['name'] ?? 'Event')
-          .toString();
+      return (event['title'] ?? event['name'] ?? 'Event').toString();
     }
 
     return 'Event #${value(['event_id'], fallback: '-')}';
   }
 
   String money(dynamic amount) {
-    final digits = (num.tryParse('$amount') ?? 0)
-        .round()
-        .toString();
+    final number = num.tryParse('$amount') ?? 0;
+    final digits = number.round().toString();
 
     return 'Rp ${digits.replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
@@ -152,19 +153,16 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   }
 
   String dateText(dynamic raw) {
-    if (raw == null || raw.toString().isEmpty) {
+    if (raw == null || raw.toString().trim().isEmpty) {
       return 'Belum tersedia';
     }
 
     try {
       final parsed = DateTime.parse(raw.toString());
 
-      // Konversi UTC ke WIB untuk timestamp yang memiliki zona waktu.
-      final localDate = parsed.isUtc
-          ? parsed.add(const Duration(hours: 7))
-          : parsed;
-
-      return dateFormatter.format(localDate);
+      // Backend menyimpan timestamp UTC. Konversi ke zona lokal
+      // perangkat agar tanggal mengikuti waktu pengguna.
+      return dateFormatter.format(parsed.toLocal());
     } catch (_) {
       return raw.toString();
     }
@@ -188,7 +186,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     }
   }
 
-  String statusLabel(String status) {
+  String orderStatusLabel(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
         return 'Menunggu Pembayaran';
@@ -203,6 +201,27 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         return 'Dibatalkan';
       case 'failed':
         return 'Gagal';
+      default:
+        return status.isEmpty ? 'Belum tersedia' : status;
+    }
+  }
+
+  String paymentStatusLabel(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'Menunggu Konfirmasi';
+      case 'success':
+      case 'paid':
+      case 'completed':
+        return 'Berhasil';
+      case 'failed':
+        return 'Gagal';
+      case 'cancelled':
+      case 'canceled':
+        return 'Dibatalkan';
+      case '':
+      case 'null':
+        return 'Belum Ada Pembayaran';
       default:
         return status;
     }
@@ -274,8 +293,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               text,
               textAlign: TextAlign.end,
               style: TextStyle(
-                fontWeight:
-                    bold ? FontWeight.bold : FontWeight.w500,
+                fontWeight: bold ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ),
@@ -285,14 +303,14 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   }
 
   Widget buildDetail() {
-    final status =
-        '${value(['status'], fallback: 'pending')}';
+    final status = '${value(['status'], fallback: 'pending')}';
 
     final id = value(
       ['id', 'order_id'],
       fallback: widget.orderId,
     );
 
+    final eventId = value(['event_id'], fallback: '-');
     final quantity = value(
       ['quantity', 'ticket_quantity'],
       fallback: 0,
@@ -305,18 +323,17 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
     final createdAt = value(['created_at', 'order_date']);
 
-    final paymentStatus = paymentValue(
-      ['payment_status'],
-      fallback: status.toLowerCase() == 'paid'
-          ? 'success'
-          : status,
-    );
+    final rawPaymentStatus =
+        paymentValue(['payment_status'], fallback: '');
 
     final normalizedPaymentStatus =
-        '${paymentStatus ?? ''}'.toLowerCase();
+        '$rawPaymentStatus'.toLowerCase();
 
     final isPaid = normalizedPaymentStatus == 'success' ||
-        normalizedPaymentStatus == 'paid';
+        normalizedPaymentStatus == 'paid' ||
+        normalizedPaymentStatus == 'completed';
+
+    final hasPayment = payment != null;
 
     final method = methodLabel(
       paymentValue(['payment_method']),
@@ -328,6 +345,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
 
     final paidAt = paymentValue(['paid_at']);
+
+    final displayPaymentStatus = hasPayment
+        ? paymentStatusLabel('$rawPaymentStatus')
+        : 'Belum Ada Pembayaran';
 
     return RefreshIndicator(
       onRefresh: loadDetail,
@@ -366,7 +387,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 const SizedBox(height: 16),
                 Chip(
                   label: Text(
-                    statusLabel(status),
+                    orderStatusLabel(status),
                     style: TextStyle(
                       color: statusColor(status),
                       fontWeight: FontWeight.bold,
@@ -380,10 +401,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
           section('Informasi Event', [
             rowInfo('Nama event', eventName()),
-            rowInfo(
-              'ID event',
-              '${value(['event_id'], fallback: '-')}',
-            ),
+            rowInfo('ID event', '$eventId'),
           ]),
 
           section('Informasi Pesanan', [
@@ -397,7 +415,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             rowInfo('Metode pembayaran', method),
             rowInfo(
               'Status pembayaran',
-              statusLabel('$paymentStatus'),
+              displayPaymentStatus,
             ),
             rowInfo('ID transaksi', '$transactionId'),
             rowInfo(
@@ -427,8 +445,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Pembayaran berhasil pada '
-                      '${dateText(paidAt)}.',
+                      'Pembayaran berhasil pada ${dateText(paidAt)}.',
                       style: TextStyle(
                         color: Colors.green.shade900,
                         fontWeight: FontWeight.w600,

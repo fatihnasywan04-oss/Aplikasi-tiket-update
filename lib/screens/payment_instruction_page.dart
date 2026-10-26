@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -33,14 +32,16 @@ class _PaymentInstructionPageState
   static const Color primary = Color(0xFF5B50E8);
 
   bool confirming = false;
+  bool confirmed = false;
   String? errorMessage;
 
   String money(double amount) {
     final digits = amount.round().toString();
-    return 'Rp ${digits.replaceAllMapped(
+    final formatted = digits.replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (match) => '.',
-    )}';
+      (_) => '.',
+    );
+    return 'Rp $formatted';
   }
 
   String get methodTitle {
@@ -57,12 +58,26 @@ class _PaymentInstructionPageState
   }
 
   String get codeLabel {
-    return widget.method == 'qris'
-        ? 'Kode QR pembayaran'
-        : 'Nomor Virtual Account';
+    switch (widget.method) {
+      case 'qris':
+        return 'Kode QR simulasi';
+      case 'transfer_bank':
+        return 'Kode transfer simulasi';
+      case 'e_wallet':
+        return 'Kode e-wallet simulasi';
+      default:
+        return 'Kode pembayaran';
+    }
   }
 
   Future<void> copyCode() async {
+    if (widget.paymentCode.trim().isEmpty) {
+      setState(() {
+        errorMessage = 'Kode pembayaran tidak tersedia.';
+      });
+      return;
+    }
+
     await Clipboard.setData(
       ClipboardData(text: widget.paymentCode),
     );
@@ -75,7 +90,14 @@ class _PaymentInstructionPageState
   }
 
   Future<void> confirmPayment() async {
-    if (confirming) return;
+    if (confirming || confirmed) return;
+
+    if (widget.paymentId <= 0) {
+      setState(() {
+        errorMessage = 'ID pembayaran tidak valid.';
+      });
+      return;
+    }
 
     setState(() {
       confirming = true;
@@ -90,16 +112,29 @@ class _PaymentInstructionPageState
       if (!mounted) return;
 
       final paymentStatus =
-          '${result['payment_status'] ?? ''}'.toLowerCase();
+          '${result['payment_status'] ?? ''}'.toLowerCase().trim();
 
       if (paymentStatus == 'success' ||
           paymentStatus == 'paid' ||
           paymentStatus == 'completed') {
+        setState(() {
+          confirming = false;
+          confirmed = true;
+        });
+
+        // Beri kesempatan UI menampilkan status berhasil.
+        await Future<void>.delayed(
+          const Duration(milliseconds: 300),
+        );
+
+        if (!mounted) return;
         Navigator.pop(context, true);
       } else {
         setState(() {
           confirming = false;
-          errorMessage = 'Pembayaran belum berhasil dikonfirmasi.';
+          errorMessage =
+              'Backend belum menyatakan pembayaran berhasil. '
+              'Silakan periksa status pembayaran dan coba lagi.';
         });
       }
     } catch (e) {
@@ -107,7 +142,10 @@ class _PaymentInstructionPageState
 
       setState(() {
         confirming = false;
-        errorMessage = e.toString().replaceFirst('Exception: ', '');
+        errorMessage = e.toString().replaceFirst(
+          RegExp(r'^Exception:\s*'),
+          '',
+        );
       });
     }
   }
@@ -115,6 +153,7 @@ class _PaymentInstructionPageState
   @override
   Widget build(BuildContext context) {
     final isQris = widget.method == 'qris';
+    final hasPaymentCode = widget.paymentCode.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7FC),
@@ -174,10 +213,13 @@ class _PaymentInstructionPageState
             const SizedBox(height: 8),
             Text(
               isQris
-                  ? 'Pindai kode berikut untuk melanjutkan pembayaran.'
-                  : 'Gunakan kode berikut sesuai metode pembayaran yang dipilih.',
+                  ? 'Kode QR ini hanya untuk simulasi pembayaran aplikasi.'
+                  : 'Kode berikut ditampilkan sebagai bagian dari simulasi pembayaran.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54),
+              style: const TextStyle(
+                color: Colors.black54,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 24),
             if (isQris)
@@ -188,12 +230,20 @@ class _PaymentInstructionPageState
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: QrImageView(
-                    data: widget.paymentCode,
-                    version: QrVersions.auto,
-                    size: 240,
-                    backgroundColor: Colors.white,
-                  ),
+                  child: hasPaymentCode
+                      ? QrImageView(
+                          data: widget.paymentCode,
+                          version: QrVersions.auto,
+                          size: 240,
+                          backgroundColor: Colors.white,
+                        )
+                      : const SizedBox(
+                          width: 240,
+                          height: 240,
+                          child: Center(
+                            child: Text('Kode QR tidak tersedia'),
+                          ),
+                        ),
                 ),
               )
             else
@@ -202,7 +252,9 @@ class _PaymentInstructionPageState
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: primary.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: primary.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -212,7 +264,7 @@ class _PaymentInstructionPageState
                     ),
                     const SizedBox(height: 12),
                     SelectableText(
-                      widget.paymentCode,
+                      hasPaymentCode ? widget.paymentCode : 'Tidak tersedia',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 22,
@@ -222,7 +274,9 @@ class _PaymentInstructionPageState
                     ),
                     const SizedBox(height: 16),
                     OutlinedButton.icon(
-                      onPressed: copyCode,
+                      onPressed: confirming || !hasPaymentCode
+                          ? null
+                          : copyCode,
                       icon: const Icon(Icons.copy),
                       label: const Text('Salin Kode'),
                     ),
@@ -233,17 +287,24 @@ class _PaymentInstructionPageState
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFFFFF4DE),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, color: primary),
+                  Icon(
+                    Icons.info_outline,
+                    color: Color(0xFF946200),
+                  ),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Periksa kembali nominal dan kode pembayaran sebelum melanjutkan.',
+                      'Pembayaran saat ini masih berupa simulasi. '
+                      'Menekan tombol konfirmasi akan meminta backend '
+                      'mengonfirmasi pembayaran, bukan memproses transfer '
+                      'bank atau transaksi QRIS sungguhan.',
+                      style: TextStyle(height: 1.5),
                     ),
                   ),
                 ],
@@ -251,16 +312,36 @@ class _PaymentInstructionPageState
             ),
             if (errorMessage != null) ...[
               const SizedBox(height: 16),
-              Text(
-                errorMessage!,
-                style: const TextStyle(color: Colors.red),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Text(
+                  errorMessage!,
+                  style: TextStyle(color: Colors.red.shade800),
+                ),
+              ),
+            ],
+            if (confirmed) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Pembayaran berhasil dikonfirmasi.',
+                style: TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
             const SizedBox(height: 24),
             SizedBox(
               height: 54,
               child: FilledButton.icon(
-                onPressed: confirming ? null : confirmPayment,
+                onPressed: confirming || confirmed
+                    ? null
+                    : confirmPayment,
                 icon: confirming
                     ? const SizedBox(
                         width: 20,
@@ -270,11 +351,17 @@ class _PaymentInstructionPageState
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.check_circle_outline),
+                    : Icon(
+                        confirmed
+                            ? Icons.check_circle
+                            : Icons.check_circle_outline,
+                      ),
                 label: Text(
                   confirming
                       ? 'Memproses...'
-                      : 'Saya Sudah Membayar',
+                      : confirmed
+                          ? 'Pembayaran Terkonfirmasi'
+                          : 'Konfirmasi Pembayaran Simulasi',
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: primary,

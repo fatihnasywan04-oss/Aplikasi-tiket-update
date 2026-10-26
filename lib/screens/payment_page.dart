@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../api_service.dart';
@@ -25,11 +24,7 @@ class PaymentPage extends StatefulWidget {
 class _PaymentPageState extends State<PaymentPage> {
   static const Color primary = Color(0xFF5B50E8);
 
-  String selectedMethod = 'transfer_bank';
-  bool submitting = false;
-  String? errorMessage;
-
-  final List<Map<String, dynamic>> methods = [
+  static const List<Map<String, dynamic>> methods = [
     {
       'value': 'transfer_bank',
       'title': 'Transfer Bank',
@@ -50,16 +45,55 @@ class _PaymentPageState extends State<PaymentPage> {
     },
   ];
 
-  String money(double amount) {
+  String selectedMethod = 'transfer_bank';
+  bool submitting = false;
+  String? errorMessage;
+
+  String money(num amount) {
     final digits = amount.round().toString();
-    return 'Rp ${digits.replaceAllMapped(
+    final formatted = digits.replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (match) => '.',
-    )}';
+      (_) => '.',
+    );
+    return 'Rp $formatted';
+  }
+
+  String readableError(Object error) {
+    return error.toString().replaceFirst(
+      RegExp(r'^Exception:\s*'),
+      '',
+    );
+  }
+
+  bool isSuccessfulStatus(String status) {
+    final normalized = status.toLowerCase().trim();
+    return normalized == 'success' ||
+        normalized == 'paid' ||
+        normalized == 'completed';
   }
 
   Future<void> submitPayment() async {
     if (submitting) return;
+
+    if (widget.orderId <= 0) {
+      setState(() => errorMessage = 'ID pesanan tidak valid.');
+      return;
+    }
+
+    if (widget.quantity < 1 || widget.quantity > 10) {
+      setState(() => errorMessage = 'Jumlah tiket tidak valid.');
+      return;
+    }
+
+    if (!methods.any((m) => m['value'] == selectedMethod)) {
+      setState(() => errorMessage = 'Metode pembayaran tidak valid.');
+      return;
+    }
+
+    if (widget.totalPrice < 0) {
+      setState(() => errorMessage = 'Total pembayaran tidak valid.');
+      return;
+    }
 
     setState(() {
       submitting = true;
@@ -74,23 +108,54 @@ class _PaymentPageState extends State<PaymentPage> {
 
       if (!mounted) return;
 
-      final paymentId = int.tryParse('${result['id']}');
-      final code = '${result['transaction_id'] ?? ''}';
-      final method = '${result['payment_method'] ?? selectedMethod}';
-      final paymentStatus =
-          '${result['payment_status'] ?? ''}'.toLowerCase();
+      final rawPaymentId = result['id'];
+      final paymentId = rawPaymentId is int
+          ? rawPaymentId
+          : int.tryParse('$rawPaymentId') ?? 0;
 
-      if (paymentId == null || code.isEmpty) {
-        throw Exception('Respons pembayaran tidak lengkap.');
+      if (paymentId <= 0) {
+        throw Exception('ID pembayaran tidak ditemukan dari server.');
       }
 
-      if (paymentStatus == 'success' ||
-          paymentStatus == 'paid' ||
-          paymentStatus == 'completed') {
+      final paymentStatus =
+          '${result['payment_status'] ?? ''}'.toLowerCase().trim();
+
+      if (isSuccessfulStatus(paymentStatus)) {
+        setState(() {
+          submitting = false;
+          errorMessage =
+              'Pembayaran sudah berhasil diproses. '
+              'Silakan periksa riwayat pesanan.';
+        });
+        return;
+      }
+
+      final code = '${result['transaction_id'] ?? ''}'.trim();
+
+      if (code.isEmpty) {
         throw Exception(
-          'Pembayaran ini sudah selesai. Periksa riwayat pesanan.',
+          'Kode transaksi tidak tersedia dari server.',
         );
       }
+
+      final rawMethod = '${result['payment_method'] ?? selectedMethod}'
+          .toLowerCase()
+          .trim();
+
+      if (!methods.any((m) => m['value'] == rawMethod)) {
+        throw Exception('Metode pembayaran dari server tidak valid.');
+      }
+
+      final rawAmount = result['amount'];
+      final serverAmount = rawAmount == null
+          ? widget.totalPrice
+          : num.tryParse('$rawAmount')?.toDouble();
+
+      if (serverAmount == null || serverAmount < 0) {
+        throw Exception('Nominal pembayaran dari server tidak valid.');
+      }
+
+      setState(() => submitting = false);
 
       final paid = await Navigator.push<bool>(
         context,
@@ -99,9 +164,9 @@ class _PaymentPageState extends State<PaymentPage> {
             paymentId: paymentId,
             orderId: widget.orderId,
             eventTitle: widget.eventTitle,
-            method: method,
+            method: rawMethod,
             paymentCode: code,
-            amount: widget.totalPrice,
+            amount: serverAmount,
           ),
         ),
       );
@@ -110,19 +175,18 @@ class _PaymentPageState extends State<PaymentPage> {
 
       if (paid == true) {
         Navigator.pop(context, true);
-        return;
       }
-
-      setState(() {
-        submitting = false;
-      });
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
 
       setState(() {
         submitting = false;
-        errorMessage = e.toString().replaceFirst('Exception: ', '');
+        errorMessage = readableError(error);
       });
+    } finally {
+      if (mounted && submitting) {
+        setState(() => submitting = false);
+      }
     }
   }
 
@@ -268,10 +332,23 @@ class _PaymentPageState extends State<PaymentPage> {
                 decoration: BoxDecoration(
                   color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
                 ),
-                child: Text(
-                  errorMessage!,
-                  style: TextStyle(color: Colors.red.shade800),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      color: Colors.red.shade800,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        errorMessage!,
+                        style: TextStyle(color: Colors.red.shade800),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -291,12 +368,25 @@ class _PaymentPageState extends State<PaymentPage> {
                       )
                     : const Icon(Icons.arrow_forward),
                 label: Text(
-                  submitting ? 'Memproses...' : 'Lanjutkan Pembayaran',
+                  submitting
+                      ? 'Memproses...'
+                      : 'Lanjutkan Pembayaran',
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: primary,
                   foregroundColor: Colors.white,
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Pembayaran masih berupa simulasi dan belum terhubung '
+              'ke penyedia pembayaran nyata.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.black54,
+                fontSize: 12,
+                height: 1.4,
               ),
             ),
           ],
