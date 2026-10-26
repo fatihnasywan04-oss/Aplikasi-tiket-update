@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -9,7 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   ApiService._();
 
-  static const String baseUrl = 'https://backend-fastapi-1.fadehost.app';
+  static const String baseUrl =
+      'https://backend-fastapi-1.fadehost.app';
   static const Duration _timeout = Duration(seconds: 20);
 
   static const String _tokenKey = 'access_token';
@@ -18,7 +20,7 @@ class ApiService {
   static const String _roleKey = 'role';
 
   // ============================================================
-  // HTTP HEADERS
+  // HEADERS
   // ============================================================
 
   static Map<String, String> _publicHeaders() => {
@@ -30,7 +32,9 @@ class ApiService {
     final token = (await getToken())?.trim();
 
     if (token == null || token.isEmpty) {
-      throw Exception('Sesi login tidak ditemukan. Silakan login kembali.');
+      throw Exception(
+        'Sesi login tidak ditemukan. Silakan login kembali.',
+      );
     }
 
     return {
@@ -40,7 +44,7 @@ class ApiService {
   }
 
   // ============================================================
-  // ERROR DAN RESPONS SERVER
+  // ERROR DAN RESPONSE
   // ============================================================
 
   static String _extractErrorMessage(dynamic result) {
@@ -54,8 +58,8 @@ class ApiService {
       if (detail is List) {
         return detail.map((item) {
           if (item is Map) {
-            final message = item['msg'] ?? item['message'];
-            return message?.toString() ?? item.toString();
+            return (item['msg'] ?? item['message'] ?? item)
+                .toString();
           }
           return item.toString();
         }).join('\n');
@@ -78,8 +82,6 @@ class ApiService {
             response.statusCode < 300) {
           throw Exception('Format respons server tidak valid.');
         }
-
-        result = null;
       }
     }
 
@@ -90,13 +92,14 @@ class ApiService {
       switch (response.statusCode) {
         case 401:
           throw Exception(
-            'Sesi login tidak valid atau telah kedaluwarsa. '
-            'Silakan login kembali. Detail: $message',
+            'Sesi login tidak valid atau kedaluwarsa. $message',
           );
         case 403:
           throw Exception('Akses ditolak. $message');
         case 404:
           throw Exception('Data atau endpoint tidak ditemukan. $message');
+        case 409:
+          throw Exception('Konflik data atau stok tiket berubah. $message');
         case 422:
           throw Exception('Data yang dikirim tidak valid. $message');
         case 429:
@@ -120,12 +123,11 @@ class ApiService {
       return result as T;
     } on TimeoutException {
       throw Exception(
-        'Koneksi ke server terlalu lama. Periksa jaringan lalu coba lagi.',
+        'Koneksi ke server terlalu lama. Periksa jaringan.',
       );
     } on SocketException {
       throw Exception(
-        'Tidak dapat terhubung ke server. Periksa koneksi internet '
-        'atau alamat backend.',
+        'Tidak dapat terhubung ke server. Periksa koneksi internet.',
       );
     } on http.ClientException {
       throw Exception(
@@ -201,7 +203,7 @@ class ApiService {
   }
 
   // ============================================================
-  // DATA CONVERSION
+  // CONVERSI DATA
   // ============================================================
 
   static Map<String, dynamic> _map(dynamic value) {
@@ -337,7 +339,6 @@ class ApiService {
     }
 
     await saveToken(token);
-
     await saveUserData(
       userId: userId,
       username: username.toString(),
@@ -370,10 +371,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getMe() async {
     final user = _map(
-      await _get(
-        '/auth/me',
-        headers: await _authHeaders(),
-      ),
+      await _get('/auth/me', headers: await _authHeaders()),
     );
 
     final id = _parseInt(user['id']);
@@ -399,7 +397,9 @@ class ApiService {
     return _list(await _get('/events/'));
   }
 
-  static Future<Map<String, dynamic>> getEventById(int eventId) async {
+  static Future<Map<String, dynamic>> getEventById(
+    int eventId,
+  ) async {
     if (eventId <= 0) {
       throw Exception('ID event tidak valid.');
     }
@@ -448,15 +448,58 @@ class ApiService {
   }
 
   // ============================================================
+  // TICKET CLASSES
+  // ============================================================
+
+  static Future<List<Map<String, dynamic>>> getTicketClasses(
+    int eventId,
+  ) async {
+    if (eventId <= 0) {
+      throw Exception('ID event tidak valid.');
+    }
+
+    return _list(
+      await _get('/events/$eventId/ticket-classes'),
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateTicketClass({
+    required int eventId,
+    required int ticketClassId,
+    required num price,
+    required int availableTickets,
+  }) async {
+    if (eventId <= 0 || ticketClassId <= 0) {
+      throw Exception('ID event atau kelas tiket tidak valid.');
+    }
+
+    if (price < 0 || availableTickets < 0) {
+      throw Exception('Harga dan stok tidak boleh negatif.');
+    }
+
+    return _map(
+      await _put(
+        '/events/$eventId/ticket-classes/$ticketClassId',
+        headers: await _authHeaders(),
+        body: {
+          'price': price,
+          'available_tickets': availableTickets,
+        },
+      ),
+    );
+  }
+
+  // ============================================================
   // ORDERS
   // ============================================================
 
   static Future<Map<String, dynamic>> createOrder({
     required int eventId,
+    required int ticketClassId,
     required int quantity,
   }) async {
-    if (eventId <= 0) {
-      throw Exception('Event tidak valid.');
+    if (eventId <= 0 || ticketClassId <= 0) {
+      throw Exception('Event atau kelas tiket tidak valid.');
     }
 
     if (quantity <= 0) {
@@ -469,6 +512,7 @@ class ApiService {
         headers: await _authHeaders(),
         body: {
           'event_id': eventId,
+          'ticket_class_id': ticketClassId,
           'quantity': quantity,
         },
       ),
@@ -477,10 +521,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getMyOrders() async {
     return _list(
-      await _get(
-        '/orders/',
-        headers: await _authHeaders(),
-      ),
+      await _get('/orders/', headers: await _authHeaders()),
     );
   }
 
@@ -524,6 +565,7 @@ class ApiService {
   static Future<Map<String, dynamic>> createPayment({
     required int orderId,
     required String paymentMethod,
+    required String paymentProvider,
   }) async {
     const methods = {
       'transfer_bank',
@@ -539,6 +581,12 @@ class ApiService {
       throw Exception('Metode pembayaran tidak valid.');
     }
 
+    final provider = paymentProvider.trim();
+
+    if (provider.isEmpty) {
+      throw Exception('Silakan pilih penyedia pembayaran.');
+    }
+
     return _map(
       await _post(
         '/payments/',
@@ -546,6 +594,7 @@ class ApiService {
         body: {
           'order_id': orderId,
           'payment_method': paymentMethod,
+          'payment_provider': provider,
         },
       ),
     );
@@ -569,10 +618,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getMyPayments() async {
     return _list(
-      await _get(
-        '/payments/',
-        headers: await _authHeaders(),
-      ),
+      await _get('/payments/', headers: await _authHeaders()),
     );
   }
 
