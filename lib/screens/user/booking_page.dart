@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -38,6 +37,10 @@ class _BookingPageState extends State<BookingPage> {
     _loadTicketClasses();
   }
 
+  // ============================================================
+  // DATA HELPERS
+  // ============================================================
+
   String _value(
     List<String> keys, {
     String fallback = '',
@@ -46,16 +49,32 @@ class _BookingPageState extends State<BookingPage> {
       final value = widget.event[key];
 
       if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
+        return value.toString().trim();
       }
     }
 
     return fallback;
   }
 
+  int? _parseId(dynamic value) {
+    if (value is int) return value;
+
+    if (value is num) {
+      if (!value.isFinite || value <= 0) return null;
+      return value.toInt();
+    }
+
+    return int.tryParse(value?.toString().trim() ?? '');
+  }
+
   int? get _eventId {
-    final rawId = _value(['id', 'event_id']);
-    return int.tryParse(rawId);
+    final id = _parseId(
+      widget.event['id'] ?? widget.event['event_id'],
+    );
+
+    if (id == null || id <= 0) return null;
+
+    return id;
   }
 
   String get _eventTitle => _value(
@@ -68,20 +87,53 @@ class _BookingPageState extends State<BookingPage> {
         fallback: 'Lokasi belum tersedia',
       );
 
-  int _toInt(dynamic value, {int fallback = 0}) {
+  int _toInt(
+    dynamic value, {
+    int fallback = 0,
+  }) {
     if (value is int) return value;
-    if (value is num) return value.toInt();
 
-    return int.tryParse(value?.toString() ?? '') ?? fallback;
+    if (value is num) {
+      if (!value.isFinite) return fallback;
+      return value.toInt();
+    }
+
+    return int.tryParse(value?.toString().trim() ?? '') ??
+        fallback;
   }
 
-  num _toNum(dynamic value, {num fallback = 0}) {
-    if (value is num) return value;
+  num _toNum(
+    dynamic value, {
+    num fallback = 0,
+  }) {
+    if (value is num) {
+      if (!value.isFinite) return fallback;
+      return value;
+    }
 
-    final raw = value?.toString() ?? '';
-    final cleaned = raw.replaceAll(RegExp(r'[^0-9.]'), '');
+    if (value == null) return fallback;
 
-    return num.tryParse(cleaned) ?? fallback;
+    var raw = value.toString().trim();
+
+    // Mendukung harga berupa angka atau string rupiah.
+    raw = raw.replaceAll(RegExp(r'[^0-9,.\-]'), '');
+
+    if (raw.isEmpty) return fallback;
+
+    // Harga dari API sebaiknya berupa angka.
+    // Untuk format string Indonesia seperti 150.000,00,
+    // titik pemisah ribuan dihapus dan koma menjadi desimal.
+    if (raw.contains(',') && raw.contains('.')) {
+      if (raw.lastIndexOf(',') > raw.lastIndexOf('.')) {
+        raw = raw.replaceAll('.', '').replaceAll(',', '.');
+      } else {
+        raw = raw.replaceAll(',', '');
+      }
+    } else if (raw.contains(',')) {
+      raw = raw.replaceAll(',', '.');
+    }
+
+    return num.tryParse(raw) ?? fallback;
   }
 
   Map<String, dynamic>? get _selectedClass {
@@ -125,16 +177,38 @@ class _BookingPageState extends State<BookingPage> {
     return 'Rp $buffer';
   }
 
+  String _cleanError(Object error) {
+    return error
+        .toString()
+        .replaceFirst('Exception: ', '')
+        .trim();
+  }
+
+  // ============================================================
+  // LOAD TICKET CLASSES
+  // ============================================================
+
   Future<void> _loadTicketClasses() async {
+    if (_loadingClasses) {
+      // Tetap izinkan pemuatan awal dan refresh.
+    }
+
     final eventId = _eventId;
 
-    if (eventId == null || eventId <= 0) {
+    if (eventId == null) {
+      if (!mounted) return;
+
       setState(() {
         _loadingClasses = false;
         _classError = 'ID event tidak valid.';
+        _ticketClasses = [];
+        _selectedClassId = null;
       });
+
       return;
     }
+
+    if (!mounted) return;
 
     setState(() {
       _loadingClasses = true;
@@ -142,11 +216,18 @@ class _BookingPageState extends State<BookingPage> {
     });
 
     try {
-      final classes = await ApiService.getTicketClasses(eventId);
+      final response = await ApiService.getTicketClasses(eventId);
 
       if (!mounted) return;
 
-      // Prioritaskan kelas VVIP, VIP, lalu Standard.
+      // Salin list sebelum diurutkan agar tidak mengubah list
+      // milik pemanggil atau data yang digunakan di tempat lain.
+      final classes = response
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) => _toInt(item['id']) > 0)
+          .toList();
+
+      // Prioritaskan VVIP, VIP, lalu Standard.
       const priority = {
         'VVIP': 0,
         'VIP': 1,
@@ -160,41 +241,75 @@ class _BookingPageState extends State<BookingPage> {
         final orderA = priority[nameA] ?? 99;
         final orderB = priority[nameB] ?? 99;
 
-        if (orderA != orderB) return orderA.compareTo(orderB);
+        if (orderA != orderB) {
+          return orderA.compareTo(orderB);
+        }
 
-        return _toNum(a['price']).compareTo(_toNum(b['price']));
+        return _toNum(a['price']).compareTo(
+          _toNum(b['price']),
+        );
       });
 
       setState(() {
         _ticketClasses = classes;
         _loadingClasses = false;
+        _classError = null;
 
-        if (_selectedClassId == null ||
-            !classes.any(
+        final selectedStillExists = _selectedClassId != null &&
+            classes.any(
               (item) => _toInt(item['id']) == _selectedClassId,
-            )) {
+            );
+
+        if (!selectedStillExists) {
           final available = classes.where(
             (item) => _toInt(item['available_tickets']) > 0,
           );
 
-          _selectedClassId = available.isNotEmpty
-              ? _toInt(available.first['id'])
-              : (classes.isNotEmpty ? _toInt(classes.first['id']) : null);
+          if (available.isNotEmpty) {
+            _selectedClassId = _toInt(available.first['id']);
+          } else if (classes.isNotEmpty) {
+            _selectedClassId = _toInt(classes.first['id']);
+          } else {
+            _selectedClassId = null;
+          }
         }
 
-        _quantity = 1;
+        // Jika kelas yang dipilih sudah habis, pilih kelas lain
+        // yang tersedia jika ada.
+        if (_selectedClassId != null) {
+          final currentClass = classes.cast<Map<String, dynamic>?>().firstWhere(
+                (item) =>
+                    _toInt(item?['id']) == _selectedClassId,
+                orElse: () => null,
+              );
+
+          if (currentClass != null &&
+              _toInt(currentClass['available_tickets']) <= 0) {
+            final available = classes.where(
+              (item) => _toInt(item['available_tickets']) > 0,
+            );
+
+            _selectedClassId = available.isNotEmpty
+                ? _toInt(available.first['id'])
+                : _toInt(currentClass['id']);
+          }
+        }
+
+        _quantity = _stock > 0 ? 1 : 0;
       });
     } catch (error) {
       if (!mounted) return;
 
       setState(() {
         _loadingClasses = false;
-        _classError = error
-            .toString()
-            .replaceFirst('Exception: ', '');
+        _classError = _cleanError(error);
       });
     }
   }
+
+  // ============================================================
+  // SELECT TICKET CLASS
+  // ============================================================
 
   void _selectClass(Map<String, dynamic> ticketClass) {
     if (_loading) return;
@@ -202,11 +317,25 @@ class _BookingPageState extends State<BookingPage> {
     final id = _toInt(ticketClass['id']);
     final stock = _toInt(ticketClass['available_tickets']);
 
+    if (id <= 0) {
+      _showMessage('ID kelas tiket tidak valid.');
+      return;
+    }
+
+    if (stock <= 0) {
+      _showMessage('Stok tiket untuk kelas ini habis.');
+      return;
+    }
+
     setState(() {
       _selectedClassId = id;
-      _quantity = stock > 0 ? 1 : 0;
+      _quantity = 1;
     });
   }
+
+  // ============================================================
+  // CREATE ORDER
+  // ============================================================
 
   Future<void> _createOrder() async {
     if (_loading) return;
@@ -214,6 +343,7 @@ class _BookingPageState extends State<BookingPage> {
     final eventId = _eventId;
     final ticketClass = _selectedClass;
     final ticketClassId = _selectedClassId;
+    final quantity = _quantity;
 
     if (eventId == null || eventId <= 0) {
       _showMessage('ID event tidak valid.');
@@ -227,36 +357,55 @@ class _BookingPageState extends State<BookingPage> {
       return;
     }
 
-    if (_quantity < 1) {
+    if (quantity < 1) {
       _showMessage('Jumlah tiket minimal 1.');
       return;
     }
 
-    if (_quantity > 10) {
+    if (quantity > 10) {
       _showMessage('Maksimal pemesanan 10 tiket.');
       return;
     }
 
-    if (_quantity > _stock) {
-      _showMessage('Stok tiket tidak mencukupi.');
+    final stock = _toInt(ticketClass['available_tickets']);
+
+    if (stock <= 0) {
+      _showMessage('Stok tiket untuk kelas ini habis.');
+      await _loadTicketClasses();
       return;
     }
 
-    setState(() => _loading = true);
+    if (quantity > stock) {
+      _showMessage(
+        'Stok tiket tidak mencukupi. Tersedia: $stock tiket.',
+      );
+      await _loadTicketClasses();
+      return;
+    }
+
+    if (_price < 0) {
+      _showMessage('Harga tiket tidak valid.');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+    });
 
     try {
       final order = await ApiService.createOrder(
         eventId: eventId,
         ticketClassId: ticketClassId,
-        quantity: _quantity,
+        quantity: quantity,
       );
 
       if (!mounted) return;
 
-      final rawOrderId = order['id'] ?? order['order_id'];
-      final orderId = _toInt(rawOrderId);
+      final orderId = _parseId(
+        order['id'] ?? order['order_id'],
+      );
 
-      if (orderId <= 0) {
+      if (orderId == null || orderId <= 0) {
         throw Exception(
           'ID pesanan tidak ditemukan pada respons server.',
         );
@@ -265,44 +414,64 @@ class _BookingPageState extends State<BookingPage> {
       final orderForPayment = <String, dynamic>{
         ...order,
         'id': orderId,
+        'order_id': orderId,
         'event_id': eventId,
         'ticket_class_id': ticketClassId,
-        'ticket_class_name': ticketClass['name'],
-        'quantity': _quantity,
-        'total_price': order['total_price'] ?? _total,
+        'ticket_class_name': ticketClass['name'] ?? 'Tiket',
+        'quantity': quantity,
+        'total_price': order['total_price'] ??
+            order['total_amount'] ??
+            _total,
         'event_title': _eventTitle,
       };
 
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PaymentPage(order: orderForPayment),
+          builder: (_) => PaymentPage(
+            order: orderForPayment,
+          ),
         ),
       );
     } catch (error) {
       if (!mounted) return;
 
       _showMessage(
-        'Gagal membuat pesanan: '
-        '${error.toString().replaceFirst('Exception: ', '')}',
+        'Gagal membuat pesanan: ${_cleanError(error)}',
       );
     } finally {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+        });
       }
     }
   }
 
+  // ============================================================
+  // MESSAGES
+  // ============================================================
+
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
-  Widget _buildTicketClassCard(Map<String, dynamic> ticketClass) {
+  // ============================================================
+  // TICKET CLASS CARD
+  // ============================================================
+
+  Widget _buildTicketClassCard(
+    Map<String, dynamic> ticketClass,
+  ) {
     final id = _toInt(ticketClass['id']);
     final name = (ticketClass['name'] ?? 'Tiket').toString();
     final price = _toNum(ticketClass['price']);
@@ -312,7 +481,9 @@ class _BookingPageState extends State<BookingPage> {
 
     return Card(
       elevation: 0,
-      color: selected ? const Color(0xFFF0EEFF) : Colors.white,
+      color: selected
+          ? const Color(0xFFF0EEFF)
+          : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
@@ -333,7 +504,9 @@ class _BookingPageState extends State<BookingPage> {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: soldOut ? Colors.grey.shade100 : _palePurple,
+                  color: soldOut
+                      ? Colors.grey.shade100
+                      : _palePurple,
                   borderRadius: BorderRadius.circular(13),
                 ),
                 child: Icon(
@@ -364,9 +537,13 @@ class _BookingPageState extends State<BookingPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      soldOut ? 'Stok habis' : 'Tersedia: $stock tiket',
+                      soldOut
+                          ? 'Stok habis'
+                          : 'Tersedia: $stock tiket',
                       style: TextStyle(
-                        color: soldOut ? Colors.red : _secondaryText,
+                        color: soldOut
+                            ? Colors.red
+                            : _secondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -389,15 +566,27 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
+  // ============================================================
+  // QUANTITY SELECTOR
+  // ============================================================
+
   Widget _buildQuantitySelector() {
     final noStock = _stock <= 0;
+
+    final maxQuantity = _stock < 10 ? _stock : 10;
 
     return Row(
       children: [
         IconButton.filledTonal(
           tooltip: 'Kurangi tiket',
-          onPressed: !_loading && !noStock && _quantity > 1
-              ? () => setState(() => _quantity--)
+          onPressed: !_loading &&
+                  !noStock &&
+                  _quantity > 1
+              ? () {
+                  setState(() {
+                    _quantity--;
+                  });
+                }
               : null,
           style: IconButton.styleFrom(
             foregroundColor: _primary,
@@ -421,7 +610,11 @@ class _BookingPageState extends State<BookingPage> {
                   !noStock &&
                   _quantity < 10 &&
                   _quantity < _stock
-              ? () => setState(() => _quantity++)
+              ? () {
+                  setState(() {
+                    _quantity++;
+                  });
+                }
               : null,
           style: IconButton.styleFrom(
             foregroundColor: _primary,
@@ -431,7 +624,7 @@ class _BookingPageState extends State<BookingPage> {
         ),
         const Spacer(),
         Text(
-          'Maks. ${_stock < 10 ? _stock : 10} tiket',
+          'Maks. $maxQuantity tiket',
           style: const TextStyle(
             color: _secondaryText,
             fontSize: 12,
@@ -440,6 +633,10 @@ class _BookingPageState extends State<BookingPage> {
       ],
     );
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -455,20 +652,29 @@ class _BookingPageState extends State<BookingPage> {
         ),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: _textColor),
+        iconTheme: const IconThemeData(
+          color: _textColor,
+        ),
       ),
       body: _loadingClasses
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
           : RefreshIndicator(
               onRefresh: _loadTicketClasses,
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(20),
                 children: [
+                  // EVENT HEADER
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [_primary, Color(0xFF9187FF)],
+                        colors: [
+                          _primary,
+                          Color(0xFF9187FF),
+                        ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -521,7 +727,9 @@ class _BookingPageState extends State<BookingPage> {
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 22),
+
                   const Text(
                     'Pilih kelas tiket',
                     style: TextStyle(
@@ -530,7 +738,10 @@ class _BookingPageState extends State<BookingPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+
                   const SizedBox(height: 10),
+
+                  // ERROR STATE
                   if (_classError != null) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -543,7 +754,9 @@ class _BookingPageState extends State<BookingPage> {
                         children: [
                           Text(
                             _classError!,
-                            style: const TextStyle(color: Colors.red),
+                            style: const TextStyle(
+                              color: Colors.red,
+                            ),
                           ),
                           const SizedBox(height: 10),
                           OutlinedButton.icon(
@@ -554,6 +767,8 @@ class _BookingPageState extends State<BookingPage> {
                         ],
                       ),
                     ),
+
+                  // EMPTY STATE
                   ] else if (_ticketClasses.isEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(18),
@@ -571,9 +786,13 @@ class _BookingPageState extends State<BookingPage> {
                         ),
                       ),
                     ),
+
+                  // TICKET CLASSES AND ORDER SUMMARY
                   ] else ...[
                     ..._ticketClasses.map(_buildTicketClassCard),
+
                     const SizedBox(height: 22),
+
                     Card(
                       elevation: 0,
                       color: Colors.white,
@@ -594,31 +813,43 @@ class _BookingPageState extends State<BookingPage> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+
                             const SizedBox(height: 16),
+
                             Row(
                               children: [
                                 const Expanded(
                                   child: Text(
                                     'Kelas tiket',
-                                    style: TextStyle(color: _secondaryText),
+                                    style: TextStyle(
+                                      color: _secondaryText,
+                                    ),
                                   ),
                                 ),
-                                Text(
-                                  (_selectedClass?['name'] ?? '-').toString(),
-                                  style: const TextStyle(
-                                    color: _textColor,
-                                    fontWeight: FontWeight.w600,
+                                Flexible(
+                                  child: Text(
+                                    (_selectedClass?['name'] ?? '-')
+                                        .toString(),
+                                    textAlign: TextAlign.end,
+                                    style: const TextStyle(
+                                      color: _textColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
+
                             const SizedBox(height: 12),
+
                             Row(
                               children: [
                                 const Expanded(
                                   child: Text(
                                     'Harga per tiket',
-                                    style: TextStyle(color: _secondaryText),
+                                    style: TextStyle(
+                                      color: _secondaryText,
+                                    ),
                                   ),
                                 ),
                                 Text(
@@ -630,7 +861,9 @@ class _BookingPageState extends State<BookingPage> {
                                 ),
                               ],
                             ),
+
                             const SizedBox(height: 18),
+
                             const Text(
                               'Jumlah tiket',
                               style: TextStyle(
@@ -638,9 +871,16 @@ class _BookingPageState extends State<BookingPage> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+
                             const SizedBox(height: 8),
+
                             _buildQuantitySelector(),
-                            const Divider(height: 30, color: _border),
+
+                            const Divider(
+                              height: 30,
+                              color: _border,
+                            ),
+
                             Row(
                               children: [
                                 const Expanded(
@@ -652,12 +892,15 @@ class _BookingPageState extends State<BookingPage> {
                                     ),
                                   ),
                                 ),
-                                Text(
-                                  _formatRupiah(_total),
-                                  style: const TextStyle(
-                                    color: _primary,
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.bold,
+                                Flexible(
+                                  child: Text(
+                                    _formatRupiah(_total),
+                                    textAlign: TextAlign.end,
+                                    style: const TextStyle(
+                                      color: _primary,
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -666,7 +909,10 @@ class _BookingPageState extends State<BookingPage> {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 24),
+
+                    // CREATE ORDER BUTTON
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: _primary,
@@ -679,6 +925,7 @@ class _BookingPageState extends State<BookingPage> {
                       onPressed: _loading ||
                               _selectedClass == null ||
                               _stock < 1 ||
+                              _quantity < 1 ||
                               _quantity > _stock
                           ? null
                           : _createOrder,
@@ -691,9 +938,13 @@ class _BookingPageState extends State<BookingPage> {
                                 strokeWidth: 2,
                               ),
                             )
-                          : const Icon(Icons.arrow_forward_rounded),
+                          : const Icon(
+                              Icons.arrow_forward_rounded,
+                            ),
                       label: Text(
-                        _loading ? 'Memproses pesanan...' : 'Buat Pesanan',
+                        _loading
+                            ? 'Memproses pesanan...'
+                            : 'Buat Pesanan',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
@@ -701,7 +952,9 @@ class _BookingPageState extends State<BookingPage> {
                       ),
                     ),
                   ],
+
                   const SizedBox(height: 16),
+
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

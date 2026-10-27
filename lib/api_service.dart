@@ -259,33 +259,78 @@ class ApiService {
   }
 
   static Map<String, dynamic> _unwrapMap(dynamic value) {
-    if (value is Map && value['data'] is Map) {
-      return Map<String, dynamic>.from(
-        value['data'] as Map,
-      );
+    dynamic current = value;
+
+    for (int depth = 0; depth < 6; depth++) {
+      if (current is! Map) break;
+
+      // Hanya unwrap jika data benar-benar berupa objek.
+      if (current['data'] is Map) {
+        current = current['data'];
+        continue;
+      }
+
+      return Map<String, dynamic>.from(current);
     }
 
-    return _map(value);
+    return _map(current);
   }
 
+  /// Membaca list langsung atau list di dalam wrapper API.
+  /// Contoh:
+  /// [...]
+  /// {"items": [...]}
+  /// {"data": [...]}
+  /// {"data": {"results": [...]}}
+  /// {"orders": [...]}
   static List<Map<String, dynamic>> _list(dynamic value) {
-    if (value is Map) {
-      value = value['items'] ??
-          value['data'] ??
-          value['results'];
+    dynamic current = value;
+
+    for (int depth = 0; depth < 6; depth++) {
+      if (current is List) {
+        return current
+            .whereType<Map>()
+            .map(
+              (item) => Map<String, dynamic>.from(item),
+            )
+            .toList();
+      }
+
+      if (current is! Map) {
+        break;
+      }
+
+      dynamic next;
+      bool found = false;
+
+      for (final key in [
+        'items',
+        'data',
+        'results',
+        'orders',
+      ]) {
+        if (current.containsKey(key) &&
+            current[key] != null) {
+          next = current[key];
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        break;
+      }
+
+      current = next;
     }
 
-    if (value is List) {
-      return value
-          .whereType<Map>()
-          .map(
-            (item) => Map<String, dynamic>.from(item),
-          )
-          .toList();
+    if (current == null) {
+      return [];
     }
 
     throw Exception(
-      'Server tidak mengembalikan daftar data.',
+      'Server tidak mengembalikan daftar data '
+      'dalam format yang dikenali.',
     );
   }
 
@@ -786,12 +831,28 @@ class ApiService {
   }
 
   static Future<List<Map<String, dynamic>>> getMyOrders() async {
-    return _list(
-      await _get(
-        '/orders/',
-        headers: await _authHeaders(),
-      ),
+    final result = await _get(
+      '/orders/',
+      headers: await _authHeaders(),
     );
+
+    final orders = _list(result);
+
+    if (kDebugMode) {
+      debugPrint(
+        '[ApiService] GET /orders/ berhasil. '
+        'Jumlah pesanan: ${orders.length}',
+      );
+
+      if (orders.isNotEmpty) {
+        debugPrint(
+          '[ApiService] ID pesanan pertama: '
+          '${orders.first['id'] ?? orders.first['order_id']}',
+        );
+      }
+    }
+
+    return orders;
   }
 
   static Future<Map<String, dynamic>> getOrderDetail(
