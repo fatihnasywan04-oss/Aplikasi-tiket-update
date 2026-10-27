@@ -13,7 +13,8 @@ class ApiService {
       'https://backend-fastapi-1.fadehost.app';
 
   static const Duration _timeout = Duration(seconds: 20);
-  static const int paymentExpirationMinutes = 15;
+  /// Batas pembayaran simulasi. Waktu resmi tetap mengikuti `expires_at` dari backend.
+  static const Duration paymentExpiration = Duration(seconds: 30);
 
   static const String _tokenKey = 'access_token';
   static const String _userIdKey = 'user_id';

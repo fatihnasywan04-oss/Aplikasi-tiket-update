@@ -1,3 +1,4 @@
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -18,8 +19,15 @@ class PaymentPage extends StatefulWidget {
 }
 
 class _PaymentPageState extends State<PaymentPage> {
+  static const int _expirationSeconds = 30;
+
   bool _loading = false;
   bool _confirming = false;
+  bool _expired = false;
+
+  Timer? _timer;
+  int _remainingSeconds = _expirationSeconds;
+  DateTime? _deadline;
 
   String _method = 'transfer_bank';
   String _provider = 'BCA';
@@ -32,6 +40,108 @@ class _PaymentPageState extends State<PaymentPage> {
     'e_wallet': ['DANA', 'OVO', 'GoPay', 'ShopeePay'],
     'qris': ['QRIS'],
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDeadline();
+  }
+
+  void _initializeDeadline() {
+    final rawDeadline = widget.order['expires_at'];
+
+    if (rawDeadline != null) {
+      final parsed = DateTime.tryParse(rawDeadline.toString());
+
+      if (parsed != null) {
+        _deadline = parsed.toUtc();
+      }
+    }
+
+    // Kompatibilitas untuk order yang tidak mengirim expires_at.
+    if (_deadline == null) {
+      final rawCreatedAt = widget.order['created_at'];
+      final createdAt = rawCreatedAt == null
+          ? null
+          : DateTime.tryParse(rawCreatedAt.toString());
+
+      _deadline = createdAt != null
+          ? createdAt.toUtc().add(
+                const Duration(seconds: _expirationSeconds),
+              )
+          : DateTime.now().toUtc().add(
+                const Duration(seconds: _expirationSeconds),
+              );
+    }
+
+    _updateCountdown();
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _updateCountdown(),
+    );
+  }
+
+  void _updateCountdown() {
+    if (!mounted || _expired) return;
+
+    final deadline = _deadline;
+
+    if (deadline == null) return;
+
+    final remaining = deadline.difference(DateTime.now().toUtc()).inSeconds;
+
+    if (remaining <= 0) {
+      setState(() {
+        _remainingSeconds = 0;
+        _expired = true;
+      });
+
+      _timer?.cancel();
+
+      // Beri tahu backend bahwa status order perlu diperiksa.
+      // Backend tetap menjadi sumber kebenaran untuk kedaluwarsa.
+      _handleExpiration();
+      return;
+    }
+
+    if (_remainingSeconds != remaining) {
+      setState(() {
+        _remainingSeconds = remaining;
+      });
+    }
+  }
+
+  Future<void> _handleExpiration() async {
+    if (!mounted) return;
+
+    _showMessage(
+      'Waktu pembayaran habis. Pesanan akan diperiksa oleh server.',
+    );
+
+    final orderId = _idFrom(['id', 'order_id']);
+
+    if (orderId == null) return;
+
+    try {
+      // Endpoint detail memeriksa kedaluwarsa pada backend.
+      await ApiService.getOrderDetail(orderId);
+    } catch (_) {
+      // Timer UI sudah habis. Status akhir tetap ditentukan backend.
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _paymentError =
+          'Waktu pembayaran habis. Periksa status pesanan di halaman tiket.';
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   String _value(
     List<String> keys, {
@@ -81,7 +191,6 @@ class _PaymentPageState extends State<PaymentPage> {
   String _formatCurrency(String raw) {
     final cleaned = raw.replaceAll(RegExp(r'[^0-9,.-]'), '');
 
-    // Harga API biasanya berupa angka desimal, misalnya 250000.00.
     final normalized = cleaned.contains(',')
         ? cleaned.replaceAll('.', '').replaceAll(',', '.')
         : cleaned;
@@ -102,6 +211,14 @@ class _PaymentPageState extends State<PaymentPage> {
     return 'Rp ${output.toString()}';
   }
 
+  String _formatTime(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
   String _providerLabel() {
     switch (_method) {
       case 'transfer_bank':
@@ -116,7 +233,9 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   void _selectMethod(String method) {
-    if (_loading || _confirming || _payment != null) return;
+    if (_loading || _confirming || _payment != null || _expired) {
+      return;
+    }
 
     setState(() {
       _method = method;
@@ -125,12 +244,19 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   void _showMessage(String message) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
   }
 
   Future<void> _submitPayment() async {
+    if (_expired || _remainingSeconds <= 0) {
+      _showMessage('Waktu pembayaran sudah habis.');
+      return;
+    }
+
     final orderId = _idFrom(['id', 'order_id']);
 
     if (orderId == null) {
@@ -167,6 +293,16 @@ class _PaymentPageState extends State<PaymentPage> {
         );
       }
 
+      // Jika request selesai setelah batas waktu, jangan lanjutkan
+      // ke proses konfirmasi dari UI.
+      if (_expired || _remainingSeconds <= 0) {
+        setState(() {
+          _payment = payment;
+          _paymentError = 'Waktu pembayaran sudah habis.';
+        });
+        return;
+      }
+
       setState(() {
         _payment = payment;
       });
@@ -190,6 +326,11 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   Future<void> _confirmSimulation() async {
+    if (_expired || _remainingSeconds <= 0) {
+      _showMessage('Waktu pembayaran sudah habis.');
+      return;
+    }
+
     final paymentId = _paymentId();
 
     if (paymentId == null) {
@@ -202,10 +343,10 @@ class _PaymentPageState extends State<PaymentPage> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Konfirmasi simulasi'),
-          content: const Text(
+          content: Text(
             'Lanjutkan simulasi pembayaran? '
-            'Jika backend menerima konfirmasi, status pesanan '
-            'akan diperbarui dan stok tiket akan diproses.',
+            'Sisa waktu: ${_formatTime(_remainingSeconds)}. '
+            'Pembayaran harus diterima backend sebelum tenggat habis.',
           ),
           actions: [
             TextButton(
@@ -223,6 +364,12 @@ class _PaymentPageState extends State<PaymentPage> {
 
     if (confirmed != true || !mounted) return;
 
+    // Periksa lagi setelah dialog ditutup.
+    if (_expired || _remainingSeconds <= 0) {
+      _showMessage('Waktu pembayaran sudah habis.');
+      return;
+    }
+
     setState(() => _confirming = true);
 
     try {
@@ -232,19 +379,33 @@ class _PaymentPageState extends State<PaymentPage> {
 
       if (!mounted) return;
 
-      final status = (result['payment_status'] ??
-              result['status'] ??
-              '')
-          .toString()
-          .toLowerCase();
+      final paymentStatus = (
+        result['payment_status'] ??
+        result['status'] ??
+        ''
+      ).toString().toLowerCase();
 
-      if (status != 'success' && status != 'paid') {
+      final orderStatus = (
+        result['order_status'] ??
+        ''
+      ).toString().toLowerCase();
+
+      if (paymentStatus != 'success' && paymentStatus != 'paid') {
         _showMessage(
           'Server belum menyatakan pembayaran berhasil. '
           'Periksa status pembayaran.',
         );
         return;
       }
+
+      if (orderStatus.isNotEmpty && orderStatus != 'paid') {
+        _showMessage(
+          'Status pesanan belum paid. Periksa kembali pesananmu.',
+        );
+        return;
+      }
+
+      _timer?.cancel();
 
       _showMessage('Pembayaran simulasi berhasil dikonfirmasi.');
 
@@ -265,6 +426,75 @@ class _PaymentPageState extends State<PaymentPage> {
         setState(() => _confirming = false);
       }
     }
+  }
+
+  Widget _countdownCard() {
+    final isUrgent = _remainingSeconds <= 10;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _expired
+            ? Colors.red.shade50
+            : isUrgent
+                ? Colors.orange.shade50
+                : AppColors.primaryPale,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _expired
+              ? Colors.red.shade200
+              : isUrgent
+                  ? Colors.orange.shade200
+                  : AppColors.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _expired ? Icons.timer_off_outlined : Icons.timer_outlined,
+            color: _expired
+                ? Colors.red
+                : isUrgent
+                    ? Colors.deepOrange
+                    : AppColors.primary,
+            size: 30,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _expired ? 'Waktu pembayaran habis' : 'Selesaikan pembayaran',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _expired
+                      ? 'Pesanan perlu diperiksa statusnya di server.'
+                      : 'Bayar sebelum hitung mundur berakhir.',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _formatTime(_remainingSeconds),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: _expired
+                  ? Colors.red
+                  : isUrgent
+                      ? Colors.deepOrange
+                      : AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _methodTile({
@@ -334,7 +564,8 @@ class _PaymentPageState extends State<PaymentPage> {
               selected: selected,
               onSelected: (_loading ||
                       _confirming ||
-                      _payment != null)
+                      _payment != null ||
+                      _expired)
                   ? null
                   : (value) {
                       if (value) {
@@ -365,7 +596,7 @@ class _PaymentPageState extends State<PaymentPage> {
       '-'
     ).toString();
 
-    final status = (
+    final paymentStatus = (
       payment['payment_status'] ??
       payment['status'] ??
       'pending'
@@ -409,7 +640,7 @@ class _PaymentPageState extends State<PaymentPage> {
           _instructionRow('Penyedia', _provider),
           _instructionRow('Total', _formatCurrency(amount.toString())),
           _instructionRow('Referensi', transactionId),
-          _instructionRow('Status', status.toUpperCase()),
+          _instructionRow('Status', paymentStatus.toUpperCase()),
           const SizedBox(height: 12),
           if (_method == 'transfer_bank')
             const Text(
@@ -436,7 +667,9 @@ class _PaymentPageState extends State<PaymentPage> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _confirming ? null : _confirmSimulation,
+              onPressed: (_confirming || _expired || _remainingSeconds <= 0)
+                  ? null
+                  : _confirmSimulation,
               icon: _confirming
                   ? const SizedBox(
                       width: 18,
@@ -448,9 +681,11 @@ class _PaymentPageState extends State<PaymentPage> {
                     )
                   : const Icon(Icons.verified_outlined),
               label: Text(
-                _confirming
-                    ? 'Mengonfirmasi...'
-                    : 'Konfirmasi Pembayaran Simulasi',
+                _expired
+                    ? 'Waktu Pembayaran Habis'
+                    : _confirming
+                        ? 'Mengonfirmasi...'
+                        : 'Konfirmasi Pembayaran Simulasi',
               ),
             ),
           ),
@@ -494,7 +729,9 @@ class _PaymentPageState extends State<PaymentPage> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pembayaran')),
+      appBar: AppBar(
+        title: const Text('Pembayaran'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -539,9 +776,29 @@ class _PaymentPageState extends State<PaymentPage> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+
+          _countdownCard(),
+
           const SizedBox(height: 24),
 
-          if (_payment == null) ...[
+          if (_expired) ...[
+            const Text(
+              'Batas waktu pembayaran telah berakhir. '
+              'Silakan periksa status pesanan di halaman tiket.',
+              style: TextStyle(
+                color: Colors.red,
+                height: 1.5,
+              ),
+            ),
+            if (_paymentError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _paymentError!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ],
+          ] else if (_payment == null) ...[
             const Text(
               'Pilih metode pembayaran',
               style: TextStyle(
@@ -583,7 +840,9 @@ class _PaymentPageState extends State<PaymentPage> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _loading ? null : _submitPayment,
+                onPressed: (_loading || _expired)
+                    ? null
+                    : _submitPayment,
                 icon: _loading
                     ? const SizedBox(
                         width: 20,
