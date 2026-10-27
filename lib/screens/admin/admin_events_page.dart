@@ -100,8 +100,6 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     return 'Rp $buffer';
   }
 
-  // Mengambil rentang harga dari kelas-kelas tiket yang tersedia.
-  // Jika data kelas tiket tidak disertakan API, gunakan harga dasar event.
   String _priceRange(Map<String, dynamic> event) {
     dynamic rawClasses;
 
@@ -112,10 +110,8 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
       'ticket_types',
       'ticketTypes',
     ]) {
-      final value = event[key];
-
-      if (value is List) {
-        rawClasses = value;
+      if (event[key] is List) {
+        rawClasses = event[key];
         break;
       }
     }
@@ -127,7 +123,6 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
         if (item is! Map) continue;
 
         final ticket = Map<String, dynamic>.from(item);
-
         final rawPrice = ticket['price'] ??
             ticket['ticket_price'] ??
             ticket['harga'];
@@ -145,20 +140,16 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     if (prices.isNotEmpty) {
       prices.sort();
 
-      final minPrice = prices.first;
-      final maxPrice = prices.last;
-
-      if (minPrice == maxPrice) {
-        return _formatRupiah(minPrice);
+      if (prices.first == prices.last) {
+        return _formatRupiah(prices.first);
       }
 
-      return '${_formatRupiah(minPrice)} – ${_formatRupiah(maxPrice)}';
+      return '${_formatRupiah(prices.first)} – '
+          '${_formatRupiah(prices.last)}';
     }
 
     final basePrice = _toNum(
-      event['price'] ??
-          event['ticket_price'] ??
-          event['harga'],
+      event['price'] ?? event['ticket_price'] ?? event['harga'],
     );
 
     return _formatRupiah(basePrice);
@@ -331,14 +322,16 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                         : Image.network(
                             image,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const ColoredBox(
-                              color: Color(0xFFEAE8FF),
-                              child: Icon(
-                                Icons.event_rounded,
-                                color: primary,
-                                size: 34,
-                              ),
-                            ),
+                            errorBuilder: (context, error, stackTrace) {
+                              return const ColoredBox(
+                                color: Color(0xFFEAE8FF),
+                                child: Icon(
+                                  Icons.event_rounded,
+                                  color: primary,
+                                  size: 34,
+                                ),
+                              );
+                            },
                           ),
                   ),
                 ),
@@ -393,7 +386,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'Rentang Harga Tiket',
+                                  'Jangkauan Harga',
                                   style: TextStyle(
                                     color: muted,
                                     fontSize: 11,
@@ -559,7 +552,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                           100,
                         ),
                         itemCount: _events.length,
-                        separatorBuilder: (_, _) =>
+                        separatorBuilder: (context, index) =>
                             const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final event = Map<String, dynamic>.from(
@@ -575,6 +568,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
 // ============================================================
 // MODEL INPUT KELAS TIKET
+// Deklarasikan class ini hanya satu kali.
 // ============================================================
 
 class _TicketClassInput {
@@ -613,6 +607,8 @@ class _EventFormDialog extends StatefulWidget {
 }
 
 class _EventFormDialogState extends State<_EventFormDialog> {
+  static const Color primary = Color(0xFF5B50E8);
+
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _titleController;
@@ -652,6 +648,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       text: _read(event, ['image_url', 'poster_url', 'image', 'gambar']),
     );
 
+    // Dipertahankan untuk kompatibilitas backend saat edit.
     _priceController = TextEditingController(
       text: _read(
         event,
@@ -668,11 +665,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       ),
     );
 
-    final rawDate = _read(
-      event,
-      ['event_date', 'date', 'tanggal'],
-    );
-
+    final rawDate = _read(event, ['event_date', 'date', 'tanggal']);
     final parsedDate = DateTime.tryParse(rawDate);
 
     if (parsedDate != null) {
@@ -688,12 +681,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       _selectedTime = const TimeOfDay(hour: 19, minute: 0);
     }
 
-    // Event baru otomatis memiliki kelas Standard.
     if (!_isEditing) {
       _ticketClasses.add(
         _TicketClassInput(
           name: 'Standard',
-          price: _priceController.text,
+          price: '0',
           stock: _stockController.text,
         ),
       );
@@ -712,6 +704,57 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       }
     }
     return fallback;
+  }
+
+  num _toNumFallback(Map<String, dynamic>? event) {
+    if (event == null) return 0;
+
+    final value = event['price'] ??
+        event['ticket_price'] ??
+        event['harga'];
+
+    if (value is num) return value;
+
+    return num.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  String _formatRupiah(num amount) {
+    final digits = amount.round().toString();
+    final buffer = StringBuffer();
+
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        buffer.write('.');
+      }
+      buffer.write(digits[i]);
+    }
+
+    return 'Rp $buffer';
+  }
+
+  String _ticketPriceRange() {
+    final prices = <num>[];
+
+    for (final ticket in _ticketClasses) {
+      final price = num.tryParse(ticket.priceController.text.trim());
+
+      if (price != null && price >= 0) {
+        prices.add(price);
+      }
+    }
+
+    if (prices.isEmpty) {
+      return 'Masukkan harga kelas tiket';
+    }
+
+    prices.sort();
+
+    if (prices.first == prices.last) {
+      return _formatRupiah(prices.first);
+    }
+
+    return '${_formatRupiah(prices.first)} – '
+        '${_formatRupiah(prices.last)}';
   }
 
   void _addTicketClass({
@@ -920,17 +963,48 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       return;
     }
 
-    final price = num.tryParse(_priceController.text.trim());
     final stock = int.tryParse(_stockController.text.trim());
 
-    if (price == null || stock == null) {
-      _message('Harga atau stok dasar tidak valid.');
+    if (stock == null || stock < 0) {
+      _message('Stok dasar tidak valid.');
       return;
     }
 
-    if (!_isEditing && _ticketClasses.isEmpty) {
-      _message('Tambahkan minimal satu jenis tiket.');
-      return;
+    num price;
+
+    if (_isEditing) {
+      price = _toNumFallback(widget.event);
+    } else {
+      if (_ticketClasses.isEmpty) {
+        _message('Tambahkan minimal satu jenis tiket.');
+        return;
+      }
+
+      final ticketPrices = <num>[];
+
+      for (final ticket in _ticketClasses) {
+        final ticketName = ticket.nameController.text.trim();
+        final ticketPrice = num.tryParse(
+          ticket.priceController.text.trim(),
+        );
+        final ticketStock = int.tryParse(
+          ticket.stockController.text.trim(),
+        );
+
+        if (ticketName.isEmpty ||
+            ticketPrice == null ||
+            ticketPrice < 0 ||
+            ticketStock == null ||
+            ticketStock < 0) {
+          _message('Periksa kembali data setiap kelas tiket.');
+          return;
+        }
+
+        ticketPrices.add(ticketPrice);
+      }
+
+      ticketPrices.sort();
+      price = ticketPrices.first;
     }
 
     final eventId = widget.event?['id'] ?? widget.event?['event_id'];
@@ -944,8 +1018,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       return;
     }
 
-    final dateIso = chosenDateTime.toIso8601String();
-
     final payload = <String, dynamic>{
       'title': _titleController.text.trim(),
       'description': _descriptionController.text.trim(),
@@ -953,7 +1025,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       'image_url': _imageController.text.trim().isEmpty
           ? null
           : _imageController.text.trim(),
-      'event_date': dateIso,
+      'event_date': chosenDateTime.toIso8601String(),
       'price': price,
       'available_tickets': stock,
     };
@@ -962,10 +1034,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     try {
       if (_isEditing) {
-        // Edit event tidak otomatis mengubah kelas tiket yang sudah ada.
         await ApiService.updateEvent(id!, payload);
       } else {
-        // 1. Simpan event terlebih dahulu.
         final createdEvent = await ApiService.createEvent(payload);
 
         final rawId = createdEvent['id'] ?? createdEvent['event_id'];
@@ -982,17 +1052,20 @@ class _EventFormDialogState extends State<_EventFormDialog> {
           );
         }
 
-        // 2. Simpan kelas tiket satu per satu.
         for (final ticket in _ticketClasses) {
           final name = ticket.nameController.text.trim();
-          final ticketPrice =
-              num.tryParse(ticket.priceController.text.trim());
-          final ticketStock =
-              int.tryParse(ticket.stockController.text.trim());
+          final ticketPrice = num.tryParse(
+            ticket.priceController.text.trim(),
+          );
+          final ticketStock = int.tryParse(
+            ticket.stockController.text.trim(),
+          );
 
           if (name.isEmpty ||
               ticketPrice == null ||
-              ticketStock == null) {
+              ticketPrice < 0 ||
+              ticketStock == null ||
+              ticketStock < 0) {
             throw Exception('Data kelas tiket "$name" tidak valid.');
           }
 
@@ -1045,6 +1118,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
         controller: controller,
+        enabled: !_saving,
         validator: validator,
         maxLines: maxLines,
         keyboardType: keyboardType,
@@ -1063,10 +1137,64 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     );
   }
 
+  Widget _buildPriceRangeCard() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0EEFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDCD7FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.confirmation_number_outlined,
+                color: primary,
+                size: 20,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Jangkauan Harga',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF282738),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _ticketPriceRange(),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: primary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Dihitung otomatis dari harga kelas tiket termurah '
+            'hingga termahal.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTicketClassFields(int index) {
     final ticket = _ticketClasses[index];
 
     return Card(
+      key: ObjectKey(ticket),
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 0,
       color: const Color(0xFFFAFAFF),
@@ -1083,9 +1211,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 Expanded(
                   child: Text(
                     'Kelas Tiket ${index + 1}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
@@ -1115,8 +1241,12 @@ class _EventFormDialogState extends State<_EventFormDialog> {
             TextFormField(
               controller: ticket.priceController,
               enabled: !_saving,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (_) {
+                setState(() {});
+              },
               decoration: const InputDecoration(
                 labelText: 'Harga tiket (Rp) *',
                 hintText: '100000',
@@ -1195,31 +1325,18 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     return null;
                   },
                 ),
-                _field(
-                  label: 'Harga dasar (Rp) *',
-                  controller: _priceController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  validator: (v) => _numberValidator(
-                    v,
-                    label: 'Harga',
-                    allowZero: true,
-                  ),
-                ),
-                _field(
-                  label: 'Stok dasar *',
-                  controller: _stockController,
-                  keyboardType: TextInputType.number,
-                  validator: (v) => _numberValidator(
-                    v,
-                    label: 'Stok',
-                    allowZero: true,
-                  ),
-                ),
-
-                // Bagian kelas tiket hanya tampil ketika membuat event.
                 if (!_isEditing) ...[
+                  _buildPriceRangeCard(),
+                  _field(
+                    label: 'Stok dasar *',
+                    controller: _stockController,
+                    keyboardType: TextInputType.number,
+                    validator: (v) => _numberValidator(
+                      v,
+                      label: 'Stok',
+                      allowZero: true,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   const Align(
                     alignment: Alignment.centerLeft,
@@ -1235,7 +1352,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Tambahkan kelas tiket beserta harga dan stoknya.',
+                      'Tambahkan kelas tiket beserta harga dan stoknya. '
+                      'Jangkauan harga akan berubah otomatis.',
                       style: TextStyle(
                         color: Colors.black54,
                         fontSize: 12,
@@ -1256,13 +1374,22 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     ),
                   ),
                 ] else ...[
+                  _field(
+                    label: 'Stok dasar *',
+                    controller: _stockController,
+                    keyboardType: TextInputType.number,
+                    validator: (v) => _numberValidator(
+                      v,
+                      label: 'Stok',
+                      allowZero: true,
+                    ),
+                  ),
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Kelas tiket untuk event yang sudah ada dikelola '
-                      'melalui fitur kelas tiket tersendiri. '
-                      'Mengubah harga dan stok dasar di sini tidak '
-                      'mengubah kelas tiket yang telah dibuat.',
+                      'Kelas tiket yang sudah ada dikelola melalui fitur '
+                      'kelas tiket tersendiri. Mengubah event di sini '
+                      'tidak mengubah harga kelas tiket.',
                       style: TextStyle(
                         color: Colors.black54,
                         fontSize: 12,
@@ -1271,7 +1398,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 16),
                 const Align(
                   alignment: Alignment.centerLeft,
@@ -1310,9 +1436,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Harga dan stok dasar tetap dikirim untuk memenuhi '
-                  'kebutuhan backend event. Harga dan stok tiap kelas '
-                  'tiket disimpan melalui endpoint kelas tiket.',
+                  'Jangkauan harga dihitung dari harga kelas tiket. '
+                  'Backend tetap menerima harga event berupa harga '
+                  'terendah agar kompatibel dengan API.',
                   style: TextStyle(
                     color: Colors.black54,
                     fontSize: 12,
@@ -1326,9 +1452,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving
-              ? null
-              : () => Navigator.pop(context, false),
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
           child: const Text('Batal'),
         ),
         FilledButton.icon(
@@ -1340,9 +1464,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.save_outlined),
-          label: Text(
-            _saving ? 'Menyimpan...' : 'Simpan',
-          ),
+          label: Text(_saving ? 'Menyimpan...' : 'Simpan'),
         ),
       ],
     );
