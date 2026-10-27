@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -13,7 +15,25 @@ class MyTicketsPage extends StatefulWidget {
 class _MyTicketsPageState extends State<MyTicketsPage> {
   bool _loading = true;
   String? _error;
+
   List<Map<String, dynamic>> _orders = [];
+
+  Map<String, dynamic> _currentUser = {};
+
+  static const List<String> _months = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
 
   @override
   void initState() {
@@ -22,7 +42,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   // ============================================================
-  // MEMUAT DATA PESANAN
+  // LOAD DATA
   // ============================================================
 
   Future<void> _load() async {
@@ -34,19 +54,50 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     });
 
     try {
-      final result = await ApiService.getMyOrders();
+      final results = await Future.wait<dynamic>([
+        ApiService.getMyOrders(),
+        ApiService.getMe(),
+      ]);
 
       if (!mounted) return;
 
+      final orders =
+          (results[0] as List<Map<String, dynamic>>);
+
+      final user =
+          Map<String, dynamic>.from(results[1] as Map);
+
       setState(() {
-        _orders = result;
+        _orders = orders;
+        _currentUser = user;
       });
+
+      // Lengkapi data yang belum disertakan endpoint daftar pesanan.
+      await _enrichOrders();
     } catch (e) {
       if (!mounted) return;
 
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-      });
+      // Jika endpoint profil gagal, pesanan tetap dicoba dimuat.
+      try {
+        final orders = await ApiService.getMyOrders();
+
+        if (!mounted) return;
+
+        setState(() {
+          _orders = orders;
+          _currentUser = {};
+        });
+
+        await _enrichOrders();
+      } catch (orderError) {
+        if (!mounted) return;
+
+        setState(() {
+          _error = orderError
+              .toString()
+              .replaceFirst('Exception: ', '');
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -56,8 +107,151 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }
   }
 
+  Future<void> _enrichOrders() async {
+    if (_orders.isEmpty) return;
+
+    final updatedOrders = <Map<String, dynamic>>[];
+
+    for (final original in _orders) {
+      final order = Map<String, dynamic>.from(original);
+
+      try {
+        final eventId = _int(
+          _firstValue([
+            order['event_id'],
+            _map(order['event'])['id'],
+          ]),
+        );
+
+        final classId = _int(
+          _firstValue([
+            order['ticket_class_id'],
+            order['ticketClassId'],
+            _map(order['ticket_class'])['id'],
+            _map(order['ticketClass'])['id'],
+          ]),
+        );
+
+        final event = _map(order['event']);
+        final ticketClass = _map(
+          order['ticket_class'] ?? order['ticketClass'],
+        );
+
+        // Ambil detail event jika pesanan hanya berisi event_id.
+        if (eventId != null &&
+            eventId > 0 &&
+            !_hasEventDetails(event)) {
+          try {
+            final detail =
+                await ApiService.getEventById(eventId);
+
+            if (detail.isNotEmpty) {
+              order['event'] = {
+                ...event,
+                ...detail,
+              };
+            }
+          } catch (_) {
+            // Informasi yang sudah ada tetap dipertahankan.
+          }
+        }
+
+        // Ambil kelas tiket berdasarkan ID yang tersimpan di pesanan.
+        if (eventId != null &&
+            eventId > 0 &&
+            classId != null &&
+            classId > 0 &&
+            !_hasClassName(ticketClass)) {
+          try {
+            final detail =
+                await ApiService.getTicketClassById(
+              eventId: eventId,
+              ticketClassId: classId,
+            );
+
+            if (detail.isNotEmpty) {
+              order['ticket_class'] = {
+                ...ticketClass,
+                ...detail,
+              };
+            }
+          } catch (_) {
+            // Gunakan ticket_class_name dari pesanan jika tersedia.
+          }
+        }
+
+        // Ambil detail pembayaran jika belum tersedia.
+        final payment = _map(
+          order['payment'] ??
+              order['latest_payment'] ??
+              order['latestPayment'],
+        );
+
+        if (payment.isEmpty) {
+          try {
+            final payments = await ApiService.getMyPayments();
+
+            final orderId = _int(
+              _firstValue([order['id'], order['order_id']]),
+            );
+
+            if (orderId != null) {
+              final matchingPayments = payments.where((item) {
+                final paymentOrderId = _int(
+                  _firstValue([
+                    item['order_id'],
+                    _map(item['order'])['id'],
+                  ]),
+                );
+
+                return paymentOrderId == orderId;
+              }).toList();
+
+              if (matchingPayments.isNotEmpty) {
+                order['payment'] = matchingPayments.last;
+              }
+            }
+          } catch (_) {
+            // Status pembayaran dari pesanan tetap digunakan.
+          }
+        }
+      } catch (_) {
+        // Jangan menghilangkan pesanan akibat detail tambahan gagal.
+      }
+
+      updatedOrders.add(order);
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _orders = updatedOrders;
+    });
+  }
+
+  bool _hasEventDetails(Map<String, dynamic> event) {
+    return _firstValue([
+          event['title'],
+          event['name'],
+          event['event_date'],
+          event['date'],
+          event['start_date'],
+          event['location'],
+          event['venue'],
+        ]) !=
+        null;
+  }
+
+  bool _hasClassName(Map<String, dynamic> ticketClass) {
+    return _firstValue([
+          ticketClass['name'],
+          ticketClass['ticket_class_name'],
+        ]) !=
+        null;
+  }
+
   // ============================================================
-  // HELPER DATA
+  // DATA HELPERS
   // ============================================================
 
   Map<String, dynamic> _map(dynamic value) {
@@ -70,6 +264,24 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }
 
     return <String, dynamic>{};
+  }
+
+  dynamic _firstValue(List<dynamic> values) {
+    for (final value in values) {
+      if (value == null) continue;
+
+      if (value is String) {
+        final text = value.trim();
+
+        if (text.isEmpty || text.toLowerCase() == 'null') {
+          continue;
+        }
+      }
+
+      return value;
+    }
+
+    return null;
   }
 
   String _text(
@@ -86,9 +298,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
       final text = value.toString().trim();
 
-      if (text.isNotEmpty &&
-          text.toLowerCase() != 'null' &&
-          text.toLowerCase() != 'none') {
+      if (text.isNotEmpty && text.toLowerCase() != 'null') {
         return text;
       }
     }
@@ -102,7 +312,11 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     String fallback = '-',
   }) {
     for (final source in sources) {
-      final value = _text(source, keys, fallback: '');
+      final value = _text(
+        source,
+        keys,
+        fallback: '',
+      );
 
       if (value.isNotEmpty) {
         return value;
@@ -112,38 +326,26 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     return fallback;
   }
 
+  int? _int(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+
+    if (value == null) return null;
+
+    return int.tryParse(value.toString().trim());
+  }
+
   double? _number(dynamic value) {
     if (value is num) return value.toDouble();
     if (value == null) return null;
 
-    var text = value.toString().trim();
+    final text = value.toString().trim();
 
     if (text.isEmpty || text.toLowerCase() == 'null') {
       return null;
     }
 
-    // Mendukung angka seperti 150000, "150000",
-    // dan format desimal umum.
-    text = text.replaceAll(' ', '');
-
-    if (text.contains(',') && text.contains('.')) {
-      // Contoh 1.500,50
-      if (text.lastIndexOf(',') > text.lastIndexOf('.')) {
-        text = text.replaceAll('.', '').replaceAll(',', '.');
-      } else {
-        // Contoh 1,500.50
-        text = text.replaceAll(',', '');
-      }
-    } else if (text.contains(',')) {
-      final parts = text.split(',');
-      if (parts.length == 2 && parts.last.length <= 2) {
-        text = text.replaceAll(',', '.');
-      } else {
-        text = text.replaceAll(',', '');
-      }
-    }
-
-    return double.tryParse(text);
+    return double.tryParse(text.replaceAll(',', ''));
   }
 
   String _money(dynamic value) {
@@ -166,6 +368,10 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     return 'Rp ${rounded < 0 ? '-' : ''}$buffer';
   }
 
+  // ============================================================
+  // DATE AND TIME
+  // ============================================================
+
   DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
 
@@ -182,147 +388,170 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     final parsed = _parseDate(value);
 
     if (parsed == null) {
-      if (value == null || value.toString().trim().isEmpty) {
-        return '-';
-      }
-
-      // Jika API mengirim tanggal dalam format lain,
-      // tampilkan nilai aslinya daripada menghilangkan data.
-      return value.toString();
+      return value == null || value.toString().trim().isEmpty
+          ? '-'
+          : value.toString();
     }
 
     final date = parsed.toLocal();
 
-    const months = [
-      'Januari',
-      'Februari',
-      'Maret',
-      'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
-      'September',
-      'Oktober',
-      'November',
-      'Desember',
-    ];
-
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
+    return '${date.day} '
+        '${_months[date.month - 1]} '
+        '${date.year}';
   }
 
   String _dateTime(dynamic value) {
     final parsed = _parseDate(value);
 
     if (parsed == null) {
-      if (value == null || value.toString().trim().isEmpty) {
-        return '-';
-      }
-
-      return value.toString();
+      return value == null || value.toString().trim().isEmpty
+          ? '-'
+          : value.toString();
     }
 
     final date = parsed.toLocal();
+
     final hour = date.hour.toString().padLeft(2, '0');
     final minute = date.minute.toString().padLeft(2, '0');
 
-    return '${_date(date.toIso8601String())} • $hour:$minute';
+    return '${_date(date)} • $hour:$minute';
   }
 
   String _time(dynamic value) {
     if (value == null) return '-';
 
-    final text = value.toString().trim();
+    final raw = value.toString().trim();
 
-    if (text.isEmpty || text.toLowerCase() == 'null') {
+    if (raw.isEmpty || raw.toLowerCase() == 'null') {
       return '-';
+    }
+
+    // Mendukung waktu berupa HH:mm atau HH:mm:ss.
+    final timeOnly = RegExp(
+      r'^(\d{1,2}):(\d{2})(?::\d{2})?$',
+    ).firstMatch(raw);
+
+    if (timeOnly != null) {
+      return '${timeOnly.group(1)!.padLeft(2, '0')}:'
+          '${timeOnly.group(2)}';
     }
 
     final parsed = _parseDate(value);
 
-    if (parsed != null) {
-      final date = parsed.toLocal();
-      return '${date.hour.toString().padLeft(2, '0')}:'
-          '${date.minute.toString().padLeft(2, '0')}';
-    }
+    if (parsed == null) return raw;
 
-    // Mendukung waktu yang dikirim terpisah, misalnya 19:30:00.
-    final match = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(text);
+    final date = parsed.toLocal();
 
-    if (match != null) {
-      return '${match.group(1)!.padLeft(2, '0')}:${match.group(2)}';
-    }
-
-    return text;
+    return '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
   }
 
-  String _combineDateTime({
-    required dynamic dateValue,
-    required dynamic timeValue,
-  }) {
-    final dateText = _text(
-      {'value': dateValue},
-      ['value'],
-      fallback: '',
-    );
+  String _eventDateTime(
+    Map<String, dynamic> event,
+    Map<String, dynamic> order,
+  ) {
+    final start = _firstValue([
+      event['start_datetime'],
+      event['start_at'],
+      event['starts_at'],
+      event['event_datetime'],
+      event['event_date'],
+      event['start_date'],
+      event['date'],
+      event['tanggal'],
+      order['event_datetime'],
+      order['event_date'],
+      order['start_date'],
+    ]);
 
-    final timeText = _text(
-      {'value': timeValue},
-      ['value'],
-      fallback: '',
-    );
+    if (start == null) return '-';
 
-    if (dateText.isEmpty) return '-';
+    final startText = start.toString().trim();
 
-    // Jika tanggal sudah mengandung jam, gunakan tanggal itu.
-    final parsedDate = _parseDate(dateValue);
+    // Field tanggal event terkadang hanya berisi tanggal.
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(startText)) {
+      final separateTime = _firstValue([
+        event['start_time'],
+        event['event_time'],
+        event['time'],
+        event['waktu'],
+        order['start_time'],
+        order['event_time'],
+      ]);
 
-    if (parsedDate != null) {
-      final hasTime = parsedDate.hour != 0 ||
-          parsedDate.minute != 0 ||
-          parsedDate.second != 0;
-
-      if (hasTime) {
-        return _dateTime(dateValue);
+      if (separateTime != null) {
+        return '${_date(start)} • ${_time(separateTime)}';
       }
     }
 
-    if (timeText.isEmpty) {
-      return _date(dateValue);
+    return _dateTime(start);
+  }
+
+  String _eventEndTime(Map<String, dynamic> event) {
+    final end = _firstValue([
+      event['end_datetime'],
+      event['end_at'],
+      event['ends_at'],
+      event['end_date'],
+      event['event_end'],
+      event['end_time'],
+      event['waktu_selesai'],
+    ]);
+
+    if (end == null) return '-';
+
+    final text = end.toString().trim();
+
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text)) {
+      return _date(end);
     }
 
-    return '${_date(dateValue)} • ${_time(timeValue)}';
+    if (RegExp(r'^\d{1,2}:\d{2}').hasMatch(text)) {
+      return _time(end);
+    }
+
+    return _dateTime(end);
   }
 
   // ============================================================
-  // STATUS PESANAN DAN PEMBAYARAN
+  // STATUS PEMESANAN DAN PEMBAYARAN
   // ============================================================
 
-  Color _statusColor(String status) {
-    switch (status.toLowerCase().trim()) {
-      case 'paid':
-      case 'confirmed':
-      case 'success':
-      case 'successful':
-      case 'completed':
-        return AppColors.success;
+  String _normalizeStatus(String value) {
+    return value.trim().toLowerCase().replaceAll('-', '_');
+  }
 
-      case 'cancelled':
-      case 'canceled':
-      case 'failed':
-      case 'expired':
-      case 'rejected':
-        return AppColors.error;
+  bool _isPaid(String status) {
+    return const {
+      'paid',
+      'confirmed',
+      'success',
+      'successful',
+      'completed',
+      'settlement',
+      'settled',
+      'captured',
+    }.contains(_normalizeStatus(status));
+  }
 
-      default:
-        return AppColors.primary;
-    }
+  bool _isFailed(String status) {
+    return const {
+      'failed',
+      'cancelled',
+      'canceled',
+      'expired',
+      'deny',
+      'denied',
+      'rejected',
+    }.contains(_normalizeStatus(status));
   }
 
   String _statusLabel(String status) {
-    switch (status.toLowerCase().trim()) {
+    switch (_normalizeStatus(status)) {
       case 'paid':
-        return 'Sudah dibayar';
+      case 'settlement':
+      case 'settled':
+        return 'Lunas';
 
       case 'confirmed':
         return 'Dikonfirmasi';
@@ -330,9 +559,11 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       case 'success':
       case 'successful':
       case 'completed':
+      case 'captured':
         return 'Berhasil';
 
       case 'pending':
+      case 'unpaid':
         return 'Menunggu pembayaran';
 
       case 'cancelled':
@@ -340,20 +571,20 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
         return 'Dibatalkan';
 
       case 'failed':
+      case 'deny':
+      case 'denied':
+      case 'rejected':
         return 'Gagal';
 
       case 'expired':
         return 'Kedaluwarsa';
 
-      case 'rejected':
-        return 'Ditolak';
+      case 'refunded':
+        return 'Dana dikembalikan';
 
-      case 'unpaid':
-        return 'Belum dibayar';
-
-      case 'unknown':
-      case '-':
       case '':
+      case '-':
+      case 'unknown':
         return 'Status tidak tersedia';
 
       default:
@@ -361,31 +592,103 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }
   }
 
-  Widget _statusChip(String label, String rawStatus) {
-    final color = _statusColor(rawStatus);
+  Color _statusColor(String status) {
+    final normalized = _normalizeStatus(status);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 7,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    if (_isPaid(normalized)) {
+      return AppColors.success;
+    }
+
+    if (_isFailed(normalized)) {
+      return AppColors.error;
+    }
+
+    return AppColors.primary;
+  }
+
+  String _effectivePaymentStatus(
+    Map<String, dynamic> order,
+    Map<String, dynamic> payment,
+  ) {
+    final paymentStatus = _firstText(
+      [payment],
+      [
+        'status',
+        'payment_status',
+        'paymentStatus',
+        'status_pembayaran',
+      ],
+      fallback: '',
+    );
+
+    final orderPaymentStatus = _firstText(
+      [order],
+      [
+        'payment_status',
+        'paymentStatus',
+        'status_pembayaran',
+      ],
+      fallback: '',
+    );
+
+    // Status pembayaran diprioritaskan dari data pembayaran.
+    if (paymentStatus.isNotEmpty) {
+      return paymentStatus;
+    }
+
+    if (orderPaymentStatus.isNotEmpty) {
+      return orderPaymentStatus;
+    }
+
+    final orderStatus = _firstText(
+      [order],
+      ['order_status', 'status'],
+      fallback: '',
+    );
+
+    // Status order paid/confirmed dapat menjadi indikator pembayaran.
+    if (_isPaid(orderStatus)) return orderStatus;
+
+    if (_isFailed(orderStatus)) return orderStatus;
+
+    return 'unknown';
+  }
+
+  String _buyerName(
+    Map<String, dynamic> order,
+    Map<String, dynamic> user,
+  ) {
+    return _firstText(
+      [user, _currentUser, order],
+      [
+        'name',
+        'full_name',
+        'username',
+        'user_name',
+        'buyer_name',
+        'nama_pemesan',
+      ],
+      fallback: '-',
+    );
+  }
+
+  String _buyerEmail(
+    Map<String, dynamic> order,
+    Map<String, dynamic> user,
+  ) {
+    return _firstText(
+      [user, _currentUser, order],
+      [
+        'email',
+        'user_email',
+        'buyer_email',
+      ],
+      fallback: '-',
     );
   }
 
   // ============================================================
-  // KOMPONEN TAMPILAN
+  // UI HELPERS
   // ============================================================
 
   Widget _detailRow(
@@ -415,7 +718,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               value,
               style: TextStyle(
                 color: AppColors.text,
-                fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+                fontWeight:
+                    bold ? FontWeight.bold : FontWeight.w500,
                 fontSize: 13,
               ),
             ),
@@ -451,35 +755,41 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     );
   }
 
-  Widget _optionalRow(
-    String label,
-    String value,
-  ) {
-    if (value.isEmpty || value == '-') {
-      return const SizedBox.shrink();
-    }
+  Widget _statusChip(String label, String rawStatus) {
+    final color = _statusColor(rawStatus);
 
-    return _detailRow(label, value);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 11,
+        vertical: 7,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
   }
 
   // ============================================================
-  // KARTU TIKET
+  // TICKET CARD
   // ============================================================
 
   Widget _ticketCard(Map<String, dynamic> order) {
     final event = _map(order['event']);
 
-    // Kelas tiket harus berasal dari pesanan yang bersangkutan.
-    // Jangan mengambil kelas default dari daftar kelas event.
     final ticketClass = _map(
-      order['ticket_class'] ??
-          order['ticketClass'] ??
-          order['ticket_class_detail'],
+      order['ticket_class'] ?? order['ticketClass'],
     );
 
-    final user = _map(
-      order['user'] ?? order['buyer'],
-    );
+    final user = _map(order['user']);
 
     final payment = _map(
       order['payment'] ??
@@ -504,55 +814,9 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       fallback: 'Event tidak diketahui',
     );
 
-    // Mendukung tanggal event dengan beberapa nama field.
-    final eventDate = _firstText(
-      [event, order],
-      [
-        'event_date',
-        'date',
-        'tanggal',
-        'start_date',
-        'event_start_date',
-        'start_datetime',
-        'start_at',
-        'starts_at',
-      ],
-      fallback: '',
-    );
+    final eventDate = _eventDateTime(event, order);
 
-    final eventStartTime = _firstText(
-      [event, order],
-      [
-        'event_start_time',
-        'start_time',
-        'time',
-        'waktu',
-        'jam_mulai',
-      ],
-      fallback: '',
-    );
-
-    final eventEndDate = _firstText(
-      [event, order],
-      [
-        'end_date',
-        'event_end_date',
-        'end_datetime',
-        'end_at',
-        'ends_at',
-      ],
-      fallback: '',
-    );
-
-    final eventEndTime = _firstText(
-      [event, order],
-      [
-        'event_end_time',
-        'end_time',
-        'jam_selesai',
-      ],
-      fallback: '',
-    );
+    final eventEnd = _eventEndTime(event);
 
     final eventLocation = _firstText(
       [event, order],
@@ -562,21 +826,71 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
         'address',
         'event_location',
         'lokasi',
-        'place',
       ],
     );
 
-    final eventAddress = _firstText(
-      [event, order],
+    final ticketName = _firstText(
+      [ticketClass, order],
       [
-        'full_address',
-        'event_address',
-        'venue_address',
-        'alamat',
-        'address_detail',
+        'ticket_class_name',
+        'class_name',
+        'ticket_name',
+        'ticket_type',
+        'name',
       ],
-      fallback: '',
+      fallback: 'Kelas tiket tidak tersedia',
     );
+
+    final quantity = _number(
+          _firstValue([
+            order['quantity'],
+            order['ticket_quantity'],
+          ]),
+        ) ??
+        0;
+
+    final orderStatus = _firstText(
+      [order],
+      ['order_status', 'status'],
+      fallback: 'unknown',
+    );
+
+    final paymentStatus = _effectivePaymentStatus(
+      order,
+      payment,
+    );
+
+    final totalValue = _firstValue([
+      order['total_price'],
+      order['total_amount'],
+      order['amount'],
+      order['total'],
+      payment['amount'],
+    ]);
+
+    final unitPriceValue = _firstValue([
+      order['ticket_price'],
+      order['unit_price'],
+      ticketClass['price'],
+      order['price'],
+    ]);
+
+    final unitPrice = unitPriceValue ??
+        (() {
+          final total = _number(totalValue);
+
+          if (total != null && quantity > 0) {
+            return total / quantity;
+          }
+
+          return null;
+        })();
+
+    final createdAt = _firstValue([
+      order['created_at'],
+      order['order_date'],
+      order['ordered_at'],
+    ]);
 
     final description = _firstText(
       [event, order],
@@ -588,110 +902,9 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       fallback: '',
     );
 
-    // Ambil nama kelas dari relasi ticket_class terlebih dahulu.
-    // Jika relasi tidak dikirim, gunakan nama kelas yang tersimpan
-    // pada order. ticket_class_id saja bukan nama kelas.
-    final ticketName = _firstText(
-      [ticketClass, order],
-      [
-        'name',
-        'ticket_class_name',
-        'class_name',
-        'ticket_name',
-        'ticket_type',
-      ],
-      fallback: 'Kelas tiket tidak tersedia',
-    );
+    final buyerName = _buyerName(order, user);
 
-    final quantityValue = _firstText(
-      [order],
-      [
-        'quantity',
-        'ticket_quantity',
-        'qty',
-      ],
-      fallback: '0',
-    );
-
-    final quantity = _number(quantityValue) ?? 0;
-
-    final orderStatus = _text(
-      order,
-      ['status', 'order_status'],
-      fallback: 'unknown',
-    );
-
-    final paymentStatus = _firstText(
-      [payment, order],
-      [
-        'payment_status',
-        'status_pembayaran',
-      ],
-      fallback: 'Belum ada informasi pembayaran',
-    );
-
-    final totalValue = _firstText(
-      [order, payment],
-      [
-        'total_price',
-        'total_amount',
-        'amount',
-        'total',
-      ],
-      fallback: '',
-    );
-
-    // Prioritas harga satuan:
-    // harga yang tersimpan pada detail kelas pesanan,
-    // lalu harga tiket yang tersimpan di order.
-    final unitPriceValue = _firstText(
-      [ticketClass, order],
-      [
-        'price',
-        'ticket_price',
-        'unit_price',
-        'price_per_ticket',
-      ],
-      fallback: '',
-    );
-
-    final total = _number(totalValue);
-    final unitPrice = _number(unitPriceValue);
-
-    // Jika harga satuan tidak tersedia, hitung dari total / jumlah.
-    final calculatedUnitPrice =
-        unitPrice ??
-        (total != null && quantity > 0 ? total / quantity : null);
-
-    final createdAt = _firstText(
-      [order],
-      [
-        'created_at',
-        'order_date',
-        'ordered_at',
-      ],
-      fallback: '',
-    );
-
-    final buyerName = _firstText(
-      [user, order],
-      [
-        'name',
-        'full_name',
-        'user_name',
-        'buyer_name',
-        'nama_pemesan',
-      ],
-    );
-
-    final buyerEmail = _firstText(
-      [user, order],
-      [
-        'email',
-        'user_email',
-        'buyer_email',
-      ],
-    );
+    final buyerEmail = _buyerEmail(order, user);
 
     final imageUrl = _firstText(
       [event, order],
@@ -699,8 +912,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
         'image_url',
         'event_image',
         'poster_url',
-        'image',
-        'poster',
       ],
       fallback: '',
     );
@@ -710,7 +921,15 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       [
         'payment_method',
         'method',
-        'metode_pembayaran',
+      ],
+      fallback: '',
+    );
+
+    final paymentProvider = _firstText(
+      [payment, order],
+      [
+        'payment_provider',
+        'provider',
       ],
       fallback: '',
     );
@@ -719,32 +938,20 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       [payment, order],
       [
         'transaction_id',
-        'payment_id',
+        'external_id',
       ],
       fallback: '',
     );
 
     final paidAt = _firstText(
       [payment, order],
-      ['paid_at', 'payment_date'],
+      ['paid_at', 'settled_at'],
       fallback: '',
     );
 
-    final eventDateDisplay = eventDate.isEmpty
+    final orderCreatedAt = createdAt == null
         ? '-'
-        : _combineDateTime(
-            dateValue: eventDate,
-            timeValue: eventStartTime,
-          );
-
-    final eventEndDisplay = eventEndDate.isNotEmpty
-        ? _combineDateTime(
-            dateValue: eventEndDate,
-            timeValue: eventEndTime,
-          )
-        : eventEndTime.isNotEmpty
-            ? _time(eventEndTime)
-            : '-';
+        : _dateTime(createdAt);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -802,8 +1009,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                 ),
                 const SizedBox(height: 7),
                 _statusChip(
-                  _statusLabel(orderStatus),
-                  orderStatus,
+                  _statusLabel(paymentStatus),
+                  paymentStatus,
                 ),
               ],
             ),
@@ -820,26 +1027,23 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                   width: double.infinity,
                   height: 170,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
+                  errorBuilder: (_, _, _) {
                     return const SizedBox.shrink();
                   },
                 ),
               ),
-
-            // ---------------- EVENT ----------------
 
             _sectionTitle(
               'Informasi event',
               Icons.event_rounded,
             ),
             _detailRow('Nama event', eventName),
-            _detailRow('Tanggal dan waktu', eventDateDisplay),
-            _detailRow('Waktu selesai', eventEndDisplay),
+            _detailRow('Tanggal dan waktu', eventDate),
+            _detailRow('Waktu selesai', eventEnd),
             _detailRow('Lokasi', eventLocation),
-            _optionalRow('Alamat lengkap', eventAddress),
-            _optionalRow('Deskripsi', description),
 
-            // ---------------- TIKET ----------------
+            if (description.isNotEmpty)
+              _detailRow('Deskripsi', description),
 
             _sectionTitle(
               'Informasi tiket',
@@ -853,21 +1057,17 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
             ),
             _detailRow(
               'Harga satuan',
-              calculatedUnitPrice == null
-                  ? '-'
-                  : _money(calculatedUnitPrice),
+              _money(unitPrice),
             ),
             _detailRow(
               'Total pembayaran',
-              total == null ? '-' : _money(total),
+              _money(totalValue),
               bold: true,
             ),
-            _optionalRow(
+            _detailRow(
               'Waktu pemesanan',
-              createdAt.isEmpty ? '-' : _dateTime(createdAt),
+              orderCreatedAt,
             ),
-
-            // ---------------- PEMESAN ----------------
 
             _sectionTitle(
               'Informasi pemesan',
@@ -875,8 +1075,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
             ),
             _detailRow('Nama pemesan', buyerName),
             _detailRow('Email pemesan', buyerEmail),
-
-            // ---------------- PEMBAYARAN ----------------
 
             _sectionTitle(
               'Informasi pembayaran',
@@ -888,16 +1086,33 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
             ),
             _detailRow(
               'Status pembayaran',
-              paymentStatus == 'Belum ada informasi pembayaran'
-                  ? paymentStatus
-                  : _statusLabel(paymentStatus),
+              _statusLabel(paymentStatus),
+              bold: true,
             ),
-            _optionalRow('Metode pembayaran', paymentMethod),
-            _optionalRow('ID transaksi', transactionId),
-            _optionalRow(
-              'Waktu pembayaran',
-              paidAt.isEmpty ? '-' : _dateTime(paidAt),
-            ),
+
+            if (paymentMethod.isNotEmpty)
+              _detailRow(
+                'Metode pembayaran',
+                paymentMethod,
+              ),
+
+            if (paymentProvider.isNotEmpty)
+              _detailRow(
+                'Penyedia pembayaran',
+                paymentProvider,
+              ),
+
+            if (transactionId.isNotEmpty)
+              _detailRow(
+                'ID transaksi',
+                transactionId,
+              ),
+
+            if (paidAt.isNotEmpty)
+              _detailRow(
+                'Waktu pembayaran',
+                _dateTime(paidAt),
+              ),
           ],
         ),
       ),
@@ -905,107 +1120,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   // ============================================================
-  // TAMPILAN LOADING, ERROR, KOSONG, DAN DAFTAR TIKET
+  // PAGE
   // ============================================================
-
-  Widget _errorView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.cloud_off_rounded,
-              size: 52,
-              color: AppColors.primaryLight,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Gagal memuat tiket',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _error ?? 'Terjadi kesalahan.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _load,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Coba Lagi'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _emptyView() {
-    return RefreshIndicator(
-      onRefresh: _load,
-      color: AppColors.primary,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 140),
-          Icon(
-            Icons.confirmation_number_outlined,
-            size: 58,
-            color: AppColors.primaryLight,
-          ),
-          SizedBox(height: 12),
-          Center(
-            child: Text(
-              'Belum ada tiket',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: AppColors.text,
-              ),
-            ),
-          ),
-          SizedBox(height: 6),
-          Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                'Pesananmu akan muncul di halaman ini.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _ticketList() {
-    return RefreshIndicator(
-      onRefresh: _load,
-      color: AppColors.primary,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
-        itemCount: _orders.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          return _ticketCard(_orders[index]);
-        },
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1013,7 +1129,9 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       appBar: AppBar(
         title: const Text(
           'Tiket Saya',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         actions: [
           IconButton(
@@ -1030,10 +1148,99 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               ),
             )
           : _error != null
-              ? _errorView()
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.cloud_off_rounded,
+                          size: 52,
+                          color: AppColors.primaryLight,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Gagal memuat tiket',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(
+                            Icons.refresh_rounded,
+                          ),
+                          label: const Text('Coba Lagi'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : _orders.isEmpty
-                  ? _emptyView()
-                  : _ticketList(),
+                  ? RefreshIndicator(
+                      onRefresh: _load,
+                      color: AppColors.primary,
+                      child: ListView(
+                        physics:
+                            const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 140),
+                          Icon(
+                            Icons.confirmation_number_outlined,
+                            size: 58,
+                            color: AppColors.primaryLight,
+                          ),
+                          SizedBox(height: 12),
+                          Center(
+                            child: Text(
+                              'Belum ada tiket',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: AppColors.text,
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Center(
+                            child: Text(
+                              'Pesananmu akan muncul di halaman ini.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      color: AppColors.primary,
+                      child: ListView.separated(
+                        physics:
+                            const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(20),
+                        itemCount: _orders.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          return _ticketCard(_orders[index]);
+                        },
+                      ),
+                    ),
     );
   }
 }
