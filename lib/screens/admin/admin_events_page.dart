@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -97,6 +98,70 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     }
 
     return 'Rp $buffer';
+  }
+
+  // Mengambil rentang harga dari kelas-kelas tiket yang tersedia.
+  // Jika data kelas tiket tidak disertakan API, gunakan harga dasar event.
+  String _priceRange(Map<String, dynamic> event) {
+    dynamic rawClasses;
+
+    for (final key in [
+      'ticket_classes',
+      'ticketClasses',
+      'ticket_classes_list',
+      'ticket_types',
+      'ticketTypes',
+    ]) {
+      final value = event[key];
+
+      if (value is List) {
+        rawClasses = value;
+        break;
+      }
+    }
+
+    final prices = <num>[];
+
+    if (rawClasses is List) {
+      for (final item in rawClasses) {
+        if (item is! Map) continue;
+
+        final ticket = Map<String, dynamic>.from(item);
+
+        final rawPrice = ticket['price'] ??
+            ticket['ticket_price'] ??
+            ticket['harga'];
+
+        if (rawPrice == null) continue;
+
+        final price = num.tryParse(rawPrice.toString());
+
+        if (price != null && price >= 0) {
+          prices.add(price);
+        }
+      }
+    }
+
+    if (prices.isNotEmpty) {
+      prices.sort();
+
+      final minPrice = prices.first;
+      final maxPrice = prices.last;
+
+      if (minPrice == maxPrice) {
+        return _formatRupiah(minPrice);
+      }
+
+      return '${_formatRupiah(minPrice)} – ${_formatRupiah(maxPrice)}';
+    }
+
+    final basePrice = _toNum(
+      event['price'] ??
+          event['ticket_price'] ??
+          event['harga'],
+    );
+
+    return _formatRupiah(basePrice);
   }
 
   Future<void> _load() async {
@@ -232,11 +297,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     );
 
     final date = _eventDate(event);
-
-    final price = _toNum(
-      event['price'] ?? event['ticket_price'] ?? event['harga'],
-    );
-
+    final priceRange = _priceRange(event);
     final isCancelled = event['is_cancelled'] == true;
 
     return Card(
@@ -270,8 +331,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                         : Image.network(
                             image,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                const ColoredBox(
+                            errorBuilder: (_, _, _) => const ColoredBox(
                               color: Color(0xFFEAE8FF),
                               child: Icon(
                                 Icons.event_rounded,
@@ -318,13 +378,40 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                         icon: Icons.calendar_month_outlined,
                         text: _formatDate(date),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _formatRupiah(price),
-                        style: const TextStyle(
-                          color: primary,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.confirmation_number_outlined,
+                            size: 17,
+                            color: primary,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Rentang Harga Tiket',
+                                  style: TextStyle(
+                                    color: muted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  priceRange,
+                                  style: const TextStyle(
+                                    color: primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -881,8 +968,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         // 1. Simpan event terlebih dahulu.
         final createdEvent = await ApiService.createEvent(payload);
 
-        final rawId =
-            createdEvent['id'] ?? createdEvent['event_id'];
+        final rawId = createdEvent['id'] ?? createdEvent['event_id'];
 
         final createdEventId = rawId is int
             ? rawId
