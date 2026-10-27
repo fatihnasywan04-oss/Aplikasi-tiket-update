@@ -1,15 +1,10 @@
-
 import 'package:flutter/material.dart';
 
 class EventCard extends StatelessWidget {
   final Map<String, dynamic> event;
   final VoidCallback onTap;
 
-  const EventCard({
-    super.key,
-    required this.event,
-    required this.onTap,
-  });
+  const EventCard({super.key, required this.event, required this.onTap});
 
   String _getValue(List<String> keys, {String fallback = '-'}) {
     for (final key in keys) {
@@ -23,26 +18,20 @@ class EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _getValue(
-      ['title', 'name', 'nama_event'],
-      fallback: 'Event',
-    );
-    final category = _getValue(
-      ['category', 'kategori'],
-      fallback: 'Event',
-    );
-    final location = _getValue(
-      ['location', 'venue', 'lokasi'],
-      fallback: 'Lokasi belum tersedia',
-    );
-    final image = _getValue(
-      ['image_url', 'poster_url', 'image', 'gambar'],
-      fallback: '',
-    );
-    final price = _getValue(
-      ['price', 'ticket_price', 'harga'],
-      fallback: '0',
-    );
+    final title = _getValue(['title', 'name', 'nama_event'], fallback: 'Event');
+    final category = _getValue(['category', 'kategori'], fallback: 'Event');
+    final location = _getValue([
+      'location',
+      'venue',
+      'lokasi',
+    ], fallback: 'Lokasi belum tersedia');
+    final image = _getValue([
+      'image_url',
+      'poster_url',
+      'image',
+      'gambar',
+    ], fallback: '');
+    final price = _getValue(['price', 'ticket_price', 'harga'], fallback: '0');
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -58,7 +47,7 @@ class EventCard extends StatelessWidget {
                   : Image.network(
                       image,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _imagePlaceholder(),
+                      errorBuilder: (_, _, _) => _imagePlaceholder(),
                     ),
             ),
             Padding(

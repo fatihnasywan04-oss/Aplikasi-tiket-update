@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -12,7 +11,9 @@ class ApiService {
 
   static const String baseUrl =
       'https://backend-fastapi-1.fadehost.app';
+
   static const Duration _timeout = Duration(seconds: 20);
+  static const int paymentExpirationMinutes = 15;
 
   static const String _tokenKey = 'access_token';
   static const String _userIdKey = 'user_id';
@@ -43,6 +44,16 @@ class ApiService {
     };
   }
 
+  static Future<Map<String, String>> _adminHeaders() async {
+    if (!await isAdmin()) {
+      throw Exception(
+        'Fitur ini hanya dapat digunakan oleh admin.',
+      );
+    }
+
+    return _authHeaders();
+  }
+
   // ============================================================
   // ERROR DAN RESPONSE
   // ============================================================
@@ -61,6 +72,7 @@ class ApiService {
             return (item['msg'] ?? item['message'] ?? item)
                 .toString();
           }
+
           return item.toString();
         }).join('\n');
       }
@@ -80,7 +92,9 @@ class ApiService {
       } on FormatException {
         if (response.statusCode >= 200 &&
             response.statusCode < 300) {
-          throw Exception('Format respons server tidak valid.');
+          throw Exception(
+            'Format respons server tidak valid.',
+          );
         }
       }
     }
@@ -90,20 +104,39 @@ class ApiService {
       final message = _extractErrorMessage(result);
 
       switch (response.statusCode) {
+        case 400:
+          throw Exception(
+            'Permintaan tidak dapat diproses. $message',
+          );
+
         case 401:
           throw Exception(
             'Sesi login tidak valid atau kedaluwarsa. $message',
           );
+
         case 403:
           throw Exception('Akses ditolak. $message');
+
         case 404:
-          throw Exception('Data atau endpoint tidak ditemukan. $message');
+          throw Exception(
+            'Endpoint atau data tidak ditemukan. $message',
+          );
+
         case 409:
-          throw Exception('Konflik data atau stok tiket berubah. $message');
+          throw Exception(
+            'Konflik data atau stok tiket berubah. $message',
+          );
+
         case 422:
-          throw Exception('Data yang dikirim tidak valid. $message');
+          throw Exception(
+            'Data yang dikirim tidak valid. $message',
+          );
+
         case 429:
-          throw Exception('Terlalu banyak permintaan. Coba lagi nanti.');
+          throw Exception(
+            'Terlalu banyak permintaan. Coba lagi nanti.',
+          );
+
         default:
           throw Exception(
             'Permintaan gagal (${response.statusCode}). $message',
@@ -120,6 +153,7 @@ class ApiService {
     try {
       final response = await request().timeout(_timeout);
       final result = _decodeResponse(response);
+
       return result as T;
     } on TimeoutException {
       throw Exception(
@@ -127,14 +161,20 @@ class ApiService {
       );
     } on SocketException {
       throw Exception(
-        'Tidak dapat terhubung ke server. Periksa koneksi internet.',
+        'Tidak dapat terhubung ke server. Periksa koneksi.',
       );
-    } on http.ClientException {
+    } on http.ClientException catch (error) {
+      if (kDebugMode) {
+        debugPrint('ApiService network error: $error');
+      }
+
       throw Exception(
         'Terjadi masalah jaringan saat menghubungi server.',
       );
     } on FormatException {
-      throw Exception('Data dari server tidak dapat dibaca.');
+      throw Exception(
+        'Data dari server tidak dapat dibaca.',
+      );
     } catch (error) {
       if (error is Exception) rethrow;
 
@@ -142,7 +182,9 @@ class ApiService {
         debugPrint('ApiService error: $error');
       }
 
-      throw Exception('Terjadi kesalahan yang tidak terduga.');
+      throw Exception(
+        'Terjadi kesalahan yang tidak terduga.',
+      );
     }
   }
 
@@ -203,35 +245,54 @@ class ApiService {
   }
 
   // ============================================================
-  // CONVERSI DATA
+  // KONVERSI RESPONSE
   // ============================================================
 
   static Map<String, dynamic> _map(dynamic value) {
-    if (value is Map) {
-      return Map<String, dynamic>.from(value);
+    if (value is! Map) {
+      throw Exception(
+        'Format objek data dari server tidak sesuai.',
+      );
     }
 
-    throw Exception('Format objek data dari server tidak sesuai.');
+    return Map<String, dynamic>.from(value);
+  }
+
+  static Map<String, dynamic> _unwrapMap(dynamic value) {
+    if (value is Map && value['data'] is Map) {
+      return Map<String, dynamic>.from(
+        value['data'] as Map,
+      );
+    }
+
+    return _map(value);
   }
 
   static List<Map<String, dynamic>> _list(dynamic value) {
     if (value is Map) {
-      value = value['items'] ?? value['data'] ?? value['results'];
+      value = value['items'] ??
+          value['data'] ??
+          value['results'];
     }
 
     if (value is List) {
       return value
           .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
+          .map(
+            (item) => Map<String, dynamic>.from(item),
+          )
           .toList();
     }
 
-    throw Exception('Server tidak mengembalikan daftar data.');
+    throw Exception(
+      'Server tidak mengembalikan daftar data.',
+    );
   }
 
   static int? _parseInt(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
+
     return int.tryParse(value?.toString() ?? '');
   }
 
@@ -247,11 +308,16 @@ class ApiService {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, normalizedToken);
+
+    await prefs.setString(
+      _tokenKey,
+      normalizedToken,
+    );
   }
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
+
     return prefs.getString(_tokenKey);
   }
 
@@ -269,21 +335,25 @@ class ApiService {
 
   static Future<int?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
+
     return prefs.getInt(_userIdKey);
   }
 
   static Future<String?> getUsername() async {
     final prefs = await SharedPreferences.getInstance();
+
     return prefs.getString(_usernameKey);
   }
 
   static Future<String?> getRole() async {
     final prefs = await SharedPreferences.getInstance();
+
     return prefs.getString(_roleKey);
   }
 
   static Future<bool> isLoggedIn() async {
     final token = await getToken();
+
     return token != null && token.trim().isNotEmpty;
   }
 
@@ -308,7 +378,7 @@ class ApiService {
     required String email,
     required String password,
   }) async {
-    final result = _map(
+    final result = _unwrapMap(
       await _post(
         '/auth/login',
         body: {
@@ -321,10 +391,13 @@ class ApiService {
     final userValue = result['user'];
 
     if (userValue is! Map) {
-      throw Exception('Respons login tidak memiliki data user.');
+      throw Exception(
+        'Respons login tidak memiliki data user.',
+      );
     }
 
     final user = Map<String, dynamic>.from(userValue);
+
     final token = result['access_token'] ?? result['token'];
     final userId = _parseInt(user['id']);
     final username = user['name'] ?? user['username'];
@@ -335,10 +408,13 @@ class ApiService {
         userId == null ||
         username == null ||
         role == null) {
-      throw Exception('Data login dari server belum lengkap.');
+      throw Exception(
+        'Data login dari server belum lengkap.',
+      );
     }
 
     await saveToken(token);
+
     await saveUserData(
       userId: userId,
       username: username.toString(),
@@ -357,7 +433,7 @@ class ApiService {
     required String email,
     required String password,
   }) async {
-    return _map(
+    return _unwrapMap(
       await _post(
         '/auth/register',
         body: {
@@ -370,8 +446,11 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getMe() async {
-    final user = _map(
-      await _get('/auth/me', headers: await _authHeaders()),
+    final user = _unwrapMap(
+      await _get(
+        '/auth/me',
+        headers: await _authHeaders(),
+      ),
     );
 
     final id = _parseInt(user['id']);
@@ -404,16 +483,18 @@ class ApiService {
       throw Exception('ID event tidak valid.');
     }
 
-    return _map(await _get('/events/$eventId'));
+    return _unwrapMap(
+      await _get('/events/$eventId'),
+    );
   }
 
   static Future<Map<String, dynamic>> createEvent(
     Map<String, dynamic> data,
   ) async {
-    return _map(
+    return _unwrapMap(
       await _post(
         '/events/',
-        headers: await _authHeaders(),
+        headers: await _adminHeaders(),
         body: data,
       ),
     );
@@ -427,10 +508,10 @@ class ApiService {
       throw Exception('ID event tidak valid.');
     }
 
-    return _map(
+    return _unwrapMap(
       await _put(
         '/events/$eventId',
-        headers: await _authHeaders(),
+        headers: await _adminHeaders(),
         body: data,
       ),
     );
@@ -443,7 +524,31 @@ class ApiService {
 
     await _delete(
       '/events/$eventId',
-      headers: await _authHeaders(),
+      headers: await _adminHeaders(),
+    );
+  }
+
+  /// Memerlukan endpoint POST /events/{id}/cancel di backend.
+  static Future<Map<String, dynamic>> cancelEvent(
+    int eventId, {
+    String? reason,
+  }) async {
+    if (eventId <= 0) {
+      throw Exception('ID event tidak valid.');
+    }
+
+    final body = <String, dynamic>{};
+
+    if (reason != null && reason.trim().isNotEmpty) {
+      body['reason'] = reason.trim();
+    }
+
+    return _unwrapMap(
+      await _post(
+        '/events/$eventId/cancel',
+        headers: await _adminHeaders(),
+        body: body,
+      ),
     );
   }
 
@@ -451,41 +556,198 @@ class ApiService {
   // TICKET CLASSES
   // ============================================================
 
-  static Future<List<Map<String, dynamic>>> getTicketClasses(
-    int eventId,
-  ) async {
+  static String _ticketClassPath(int eventId) {
     if (eventId <= 0) {
       throw Exception('ID event tidak valid.');
     }
 
+    return '/events/$eventId/ticket-classes';
+  }
+
+  static void _validateTicketClassIds({
+    required int eventId,
+    int? ticketClassId,
+  }) {
+    if (eventId <= 0) {
+      throw Exception('ID event tidak valid.');
+    }
+
+    if (ticketClassId != null && ticketClassId <= 0) {
+      throw Exception('ID kelas tiket tidak valid.');
+    }
+  }
+
+  /// Mengambil semua kelas tiket untuk satu event.
+  /// Endpoint FastAPI: GET /events/{event_id}/ticket-classes/
+  static Future<List<Map<String, dynamic>>> getTicketClasses(
+    int eventId,
+  ) async {
+    _validateTicketClassIds(eventId: eventId);
+
     return _list(
-      await _get('/events/$eventId/ticket-classes'),
+      await _get('${_ticketClassPath(eventId)}/'),
     );
   }
 
-  static Future<Map<String, dynamic>> updateTicketClass({
+  /// Mengambil detail satu kelas tiket.
+  static Future<Map<String, dynamic>> getTicketClassById({
     required int eventId,
     required int ticketClassId,
+  }) async {
+    _validateTicketClassIds(
+      eventId: eventId,
+      ticketClassId: ticketClassId,
+    );
+
+    return _unwrapMap(
+      await _get(
+        '${_ticketClassPath(eventId)}/$ticketClassId',
+      ),
+    );
+  }
+
+  /// Membuat kelas tiket Standard, VIP, VVIP, atau nama lainnya.
+  /// Endpoint FastAPI: POST /events/{event_id}/ticket-classes/
+  static Future<Map<String, dynamic>> createTicketClass({
+    required int eventId,
+    required String name,
     required num price,
     required int availableTickets,
   }) async {
-    if (eventId <= 0 || ticketClassId <= 0) {
-      throw Exception('ID event atau kelas tiket tidak valid.');
+    _validateTicketClassIds(eventId: eventId);
+
+    final normalizedName = name.trim();
+
+    if (normalizedName.isEmpty) {
+      throw Exception('Nama kelas tiket wajib diisi.');
     }
 
-    if (price < 0 || availableTickets < 0) {
-      throw Exception('Harga dan stok tidak boleh negatif.');
+    if (normalizedName.length > 30) {
+      throw Exception(
+        'Nama kelas tiket maksimal 30 karakter.',
+      );
     }
 
-    return _map(
-      await _put(
-        '/events/$eventId/ticket-classes/$ticketClassId',
-        headers: await _authHeaders(),
+    if (price < 0) {
+      throw Exception('Harga tiket tidak boleh negatif.');
+    }
+
+    if (availableTickets < 0) {
+      throw Exception('Stok tiket tidak boleh negatif.');
+    }
+
+    return _unwrapMap(
+      await _post(
+        '${_ticketClassPath(eventId)}/',
+        headers: await _adminHeaders(),
         body: {
+          'name': normalizedName,
           'price': price,
           'available_tickets': availableTickets,
         },
       ),
+    );
+  }
+
+  /// Memperbarui nama, harga, dan stok kelas tiket.
+  static Future<Map<String, dynamic>> updateTicketClass({
+    required int eventId,
+    required int ticketClassId,
+    String? name,
+    required num price,
+    required int availableTickets,
+  }) async {
+    _validateTicketClassIds(
+      eventId: eventId,
+      ticketClassId: ticketClassId,
+    );
+
+    if (price < 0) {
+      throw Exception('Harga tiket tidak boleh negatif.');
+    }
+
+    if (availableTickets < 0) {
+      throw Exception('Stok tiket tidak boleh negatif.');
+    }
+
+    final body = <String, dynamic>{
+      'price': price,
+      'available_tickets': availableTickets,
+    };
+
+    if (name != null) {
+      final normalizedName = name.trim();
+
+      if (normalizedName.isEmpty) {
+        throw Exception(
+          'Nama kelas tiket tidak boleh kosong.',
+        );
+      }
+
+      if (normalizedName.length > 30) {
+        throw Exception(
+          'Nama kelas tiket maksimal 30 karakter.',
+        );
+      }
+
+      body['name'] = normalizedName;
+    }
+
+    return _unwrapMap(
+      await _put(
+        '${_ticketClassPath(eventId)}/$ticketClassId',
+        headers: await _adminHeaders(),
+        body: body,
+      ),
+    );
+  }
+
+  /// Mengubah harga kelas tiket tanpa mengubah stok.
+  static Future<Map<String, dynamic>> updateTicketClassPrice({
+    required int eventId,
+    required int ticketClassId,
+    required num price,
+  }) async {
+    if (price < 0) {
+      throw Exception('Harga tiket tidak boleh negatif.');
+    }
+
+    final ticketClasses = await getTicketClasses(eventId);
+
+    final ticketClass = ticketClasses.firstWhere(
+      (item) => _parseInt(item['id']) == ticketClassId,
+      orElse: () => throw Exception(
+        'Kelas tiket tidak ditemukan.',
+      ),
+    );
+
+    final currentStock = _parseInt(
+          ticketClass['available_tickets'],
+        ) ??
+        0;
+
+    return updateTicketClass(
+      eventId: eventId,
+      ticketClassId: ticketClassId,
+      name: ticketClass['name']?.toString(),
+      price: price,
+      availableTickets: currentStock,
+    );
+  }
+
+  /// Menghapus kelas tiket.
+  static Future<void> deleteTicketClass({
+    required int eventId,
+    required int ticketClassId,
+  }) async {
+    _validateTicketClassIds(
+      eventId: eventId,
+      ticketClassId: ticketClassId,
+    );
+
+    await _delete(
+      '${_ticketClassPath(eventId)}/$ticketClassId',
+      headers: await _adminHeaders(),
     );
   }
 
@@ -499,14 +761,18 @@ class ApiService {
     required int quantity,
   }) async {
     if (eventId <= 0 || ticketClassId <= 0) {
-      throw Exception('Event atau kelas tiket tidak valid.');
+      throw Exception(
+        'Event atau kelas tiket tidak valid.',
+      );
     }
 
     if (quantity <= 0) {
-      throw Exception('Jumlah tiket harus lebih dari nol.');
+      throw Exception(
+        'Jumlah tiket harus lebih dari nol.',
+      );
     }
 
-    return _map(
+    return _unwrapMap(
       await _post(
         '/orders/',
         headers: await _authHeaders(),
@@ -521,7 +787,10 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getMyOrders() async {
     return _list(
-      await _get('/orders/', headers: await _authHeaders()),
+      await _get(
+        '/orders/',
+        headers: await _authHeaders(),
+      ),
     );
   }
 
@@ -532,19 +801,12 @@ class ApiService {
       throw Exception('ID pesanan tidak valid.');
     }
 
-    final response = _map(
+    return _unwrapMap(
       await _get(
         '/orders/$orderId',
         headers: await _authHeaders(),
       ),
     );
-
-    final detail = response['data'];
-    if (detail is Map) {
-      return Map<String, dynamic>.from(detail);
-    }
-
-    return response;
   }
 
   static Future<void> cancelOrder(int orderId) async {
@@ -556,6 +818,20 @@ class ApiService {
       '/orders/$orderId',
       headers: await _authHeaders(),
     );
+  }
+
+  static DateTime? parseOrderExpiration(
+    Map<String, dynamic> order,
+  ) {
+    final value = order['expires_at'];
+
+    if (value == null) return null;
+
+    final parsed = DateTime.tryParse(value.toString());
+
+    if (parsed == null) return null;
+
+    return parsed.toUtc();
   }
 
   // ============================================================
@@ -584,10 +860,12 @@ class ApiService {
     final provider = paymentProvider.trim();
 
     if (provider.isEmpty) {
-      throw Exception('Silakan pilih penyedia pembayaran.');
+      throw Exception(
+        'Silakan pilih penyedia pembayaran.',
+      );
     }
 
-    return _map(
+    return _unwrapMap(
       await _post(
         '/payments/',
         headers: await _authHeaders(),
@@ -600,6 +878,8 @@ class ApiService {
     );
   }
 
+  /// Gunakan untuk backend simulasi jika endpoint ini tersedia.
+  /// Pembayaran nyata harus diverifikasi oleh payment gateway.
   static Future<Map<String, dynamic>> confirmPayment({
     required int paymentId,
   }) async {
@@ -607,7 +887,7 @@ class ApiService {
       throw Exception('ID pembayaran tidak valid.');
     }
 
-    return _map(
+    return _unwrapMap(
       await _post(
         '/payments/$paymentId/confirm',
         headers: await _authHeaders(),
@@ -618,7 +898,10 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getMyPayments() async {
     return _list(
-      await _get('/payments/', headers: await _authHeaders()),
+      await _get(
+        '/payments/',
+        headers: await _authHeaders(),
+      ),
     );
   }
 
@@ -627,10 +910,10 @@ class ApiService {
   // ============================================================
 
   static Future<Map<String, dynamic>> getAdminDashboard() async {
-    return _map(
+    return _unwrapMap(
       await _get(
         '/admin/dashboard',
-        headers: await _authHeaders(),
+        headers: await _adminHeaders(),
       ),
     );
   }
@@ -639,7 +922,7 @@ class ApiService {
     return _list(
       await _get(
         '/admin/orders',
-        headers: await _authHeaders(),
+        headers: await _adminHeaders(),
       ),
     );
   }
@@ -648,7 +931,7 @@ class ApiService {
     return _list(
       await _get(
         '/admin/payments',
-        headers: await _authHeaders(),
+        headers: await _adminHeaders(),
       ),
     );
   }
