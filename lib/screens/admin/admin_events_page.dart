@@ -732,6 +732,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     return 'Rp $buffer';
   }
 
+  
   String _ticketPriceRange() {
     final prices = <num>[];
 
@@ -750,12 +751,13 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     prices.sort();
 
     if (prices.first == prices.last) {
-      return _formatRupiah(prices.first);
+      return 'Mulai dari ${_formatRupiah(prices.first)}';
     }
 
-    return '${_formatRupiah(prices.first)} – '
+    return 'Mulai dari ${_formatRupiah(prices.first)} - '
         '${_formatRupiah(prices.last)}';
   }
+
 
   void _addTicketClass({
     String name = '',
