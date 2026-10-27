@@ -58,13 +58,17 @@ class _EventDetailPageState extends State<EventDetailPage> {
   num _number(dynamic value) {
     if (value is num) return value;
 
-    final cleaned = value
-        ?.toString()
+    final raw = value?.toString().trim() ?? '';
+
+    if (raw.isEmpty) return 0;
+
+    // Mendukung format angka API dan format rupiah.
+    final cleaned = raw
         .replaceAll(RegExp(r'[^0-9,.-]'), '')
         .replaceAll('.', '')
         .replaceAll(',', '.');
 
-    return num.tryParse(cleaned ?? '') ?? 0;
+    return num.tryParse(cleaned) ?? 0;
   }
 
   String _formatPrice(dynamic value) {
@@ -75,6 +79,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       if (i > 0 && (digits.length - i) % 3 == 0) {
         buffer.write('.');
       }
+
       buffer.write(digits[i]);
     }
 
@@ -82,23 +87,65 @@ class _EventDetailPageState extends State<EventDetailPage> {
   }
 
   String _normalizeClassName(dynamic value) {
-    final name = (value ?? '').toString().trim().toLowerCase();
+    final name = (value ?? '').toString().trim();
+    final normalized = name.toLowerCase();
 
-    if (name == 'vvip') return 'VVIP';
-    if (name == 'vip') return 'VIP';
-    if (name == 'standard') return 'Standard';
+    if (normalized == 'vvip') return 'VVIP';
+    if (normalized == 'vip') return 'VIP';
+    if (normalized == 'standard') return 'Standard';
 
-    return (value ?? 'Tiket').toString();
+    return name.isEmpty ? 'Tiket' : name;
+  }
+
+  // ============================================================
+  // JANGKAUAN HARGA OTOMATIS
+  // Mengambil harga terendah dan tertinggi dari kelas tiket API.
+  // ============================================================
+
+  String _ticketPriceRange() {
+    if (_ticketClasses.isEmpty) {
+      return 'Harga belum tersedia';
+    }
+
+    final prices = <num>[];
+
+    for (final ticket in _ticketClasses) {
+      final rawPrice = ticket['price'];
+
+      if (rawPrice == null) continue;
+
+      final price = _number(rawPrice);
+
+      if (price >= 0) {
+        prices.add(price);
+      }
+    }
+
+    if (prices.isEmpty) {
+      return 'Harga belum tersedia';
+    }
+
+    prices.sort();
+
+    if (prices.first == prices.last) {
+      return 'Mulai dari ${_formatPrice(prices.first)}';
+    }
+
+    return 'Mulai dari ${_formatPrice(prices.first)} - '
+        '${_formatPrice(prices.last)}';
   }
 
   Future<void> _loadTicketClasses() async {
     final id = _eventId;
 
     if (id == null || id <= 0) {
+      if (!mounted) return;
+
       setState(() {
         _loadingClasses = false;
         _classError = 'ID event tidak ditemukan.';
       });
+
       return;
     }
 
@@ -112,7 +159,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
       if (!mounted) return;
 
-      // Tampilkan kelas tiket yang dikenal terlebih dahulu.
       const priority = {
         'VVIP': 0,
         'VIP': 1,
@@ -133,18 +179,18 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
       int? selectedId;
 
-      // Pertahankan pilihan lama jika stoknya masih tersedia.
+      // Pertahankan pilihan sebelumnya jika stoknya masih tersedia.
       for (final ticket in availableClasses) {
-        final id = _readInt(ticket['id']);
+        final ticketId = _readInt(ticket['id']);
         final stock = _readInt(ticket['available_tickets']) ?? 0;
 
-        if (id == _selectedTicketClassId && stock > 0) {
-          selectedId = id;
+        if (ticketId == _selectedTicketClassId && stock > 0) {
+          selectedId = ticketId;
           break;
         }
       }
 
-      // Jika belum ada pilihan, pilih kelas pertama yang stoknya tersedia.
+      // Jika belum ada pilihan, pilih kelas pertama yang masih tersedia.
       if (selectedId == null) {
         for (final ticket in availableClasses) {
           final stock = _readInt(ticket['available_tickets']) ?? 0;
@@ -202,7 +248,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
       return;
     }
 
-    // Teruskan kelas terpilih agar BookingPage dapat menggunakannya.
     final bookingEvent = <String, dynamic>{
       ...event,
       'id': eventId,
@@ -355,6 +400,70 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     color: muted,
                   ),
                 ),
+                const SizedBox(height: 24),
+
+                // =================================================
+                // KARTU JANGKAUAN HARGA
+                // =================================================
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFEAEAF3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.confirmation_number_outlined,
+                            color: primary,
+                            size: 21,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Jangkauan Harga',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: dark,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _loadingClasses
+                            ? 'Memuat harga...'
+                            : _classError != null
+                                ? 'Harga belum dapat dimuat'
+                                : _ticketPriceRange(),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: primary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Harga dihitung otomatis dari kelas tiket '
+                        'termurah hingga termahal.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.5,
+                          color: muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 const SizedBox(height: 28),
 
                 const Text(
@@ -504,9 +613,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                                           : 'Tersedia $stock tiket',
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: isSoldOut
-                                            ? Colors.red
-                                            : muted,
+                                        color: isSoldOut ? Colors.red : muted,
                                       ),
                                     ),
                                     const SizedBox(height: 5),
