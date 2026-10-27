@@ -153,7 +153,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Masuk untuk menemukan dan memesan event favoritmu.',
+                      'Masuk untuk menemukan dan memesan tiket event favoritmu.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.textSecondary,
@@ -173,7 +173,7 @@ class _LoginPageState extends State<LoginPage> {
                       autofillHints: const [AutofillHints.email],
                       validator: _validateEmail,
                       decoration: const InputDecoration(
-                        hintText: 'nama@email.com',
+                        hintText: 'Email',
                         prefixIcon: Icon(Icons.email_outlined),
                       ),
                     ),

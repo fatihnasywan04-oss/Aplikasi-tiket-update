@@ -130,7 +130,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Selamat datang, Admin!',
+                              'Selamat datang',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 23,

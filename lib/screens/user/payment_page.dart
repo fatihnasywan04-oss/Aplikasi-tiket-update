@@ -603,23 +603,17 @@ class _PaymentPageState extends State<PaymentPage> {
           const SizedBox(height: 12),
           if (_method == 'transfer_bank')
             const Text(
-              'Simulasi transfer: gunakan nomor referensi di atas '
-              'sebagai identitas transaksi. Ini bukan nomor rekening '
-              'atau virtual account bank sungguhan.',
+              'Ini hanya simulasi.',
               style: TextStyle(height: 1.5),
             )
           else if (_method == 'e_wallet')
             const Text(
-              'Simulasi e-wallet: tidak ada saldo yang dipotong. '
-              'Tekan tombol konfirmasi untuk menyimulasikan '
-              'verifikasi pembayaran oleh backend.',
+              'Ini hanya simulasi.',
               style: TextStyle(height: 1.5),
             )
           else
             const Text(
-              'Simulasi QRIS: pembayaran ini belum menggunakan '
-              'QR pembayaran sungguhan. Kode referensi bukan QR '
-              'yang dapat dipindai.',
+              'Ini hanya simulasi.',
               style: TextStyle(height: 1.5),
             ),
           const SizedBox(height: 18),

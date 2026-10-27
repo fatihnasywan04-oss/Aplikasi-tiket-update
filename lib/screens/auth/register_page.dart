@@ -229,7 +229,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Buat akun untuk mulai memesan event favoritmu.',
+                      'Buat akun untuk mulai memesan tiket event favoritmu.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.textSecondary,
@@ -271,7 +271,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       autofillHints: const [AutofillHints.email],
                       validator: _validateEmail,
                       decoration: _inputDecoration(
-                        hint: 'nama@email.com',
+                        hint: 'Email',
                         icon: Icons.email_outlined,
                       ),
                     ),
