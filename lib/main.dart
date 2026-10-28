@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'api_service.dart';
@@ -22,10 +23,19 @@ const Color appBackgroundColor = Color(0xFFF7F7FC);
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Aktifkan fullscreen imersif.
+  // Menyembunyikan status bar dan navigation bar Android.
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.immersiveSticky,
+  );
+
+  // Inisialisasi format tanggal Indonesia.
   try {
     await initializeDateFormatting('id_ID', null);
   } catch (e, stackTrace) {
-    debugPrint('[Main] Gagal menginisialisasi format tanggal: $e');
+    debugPrint(
+      '[Main] Gagal menginisialisasi format tanggal: $e',
+    );
     debugPrintStack(stackTrace: stackTrace);
   }
 
@@ -49,24 +59,30 @@ class EventTicketersApp extends StatelessWidget {
     return MaterialApp(
       title: 'Event Ticketers',
       debugShowCheckedModeBanner: false,
+
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: scheme,
         scaffoldBackgroundColor: appBackgroundColor,
+
         appBarTheme: const AppBarTheme(
           backgroundColor: appBackgroundColor,
           foregroundColor: Color(0xFF282738),
           elevation: 0,
         ),
+
         cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 0,
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: Color(0xFFEAEAF3)),
+            side: const BorderSide(
+              color: Color(0xFFEAEAF3),
+            ),
           ),
         ),
+
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -74,14 +90,21 @@ class EventTicketersApp extends StatelessWidget {
             horizontal: 16,
             vertical: 15,
           ),
+
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFE0E0ED)),
+            borderSide: const BorderSide(
+              color: Color(0xFFE0E0ED),
+            ),
           ),
+
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFE0E0ED)),
+            borderSide: const BorderSide(
+              color: Color(0xFFE0E0ED),
+            ),
           ),
+
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(
@@ -90,6 +113,7 @@ class EventTicketersApp extends StatelessWidget {
             ),
           ),
         ),
+
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: appPrimaryColor,
@@ -100,14 +124,18 @@ class EventTicketersApp extends StatelessWidget {
             ),
           ),
         ),
+
         navigationBarTheme: const NavigationBarThemeData(
           backgroundColor: Colors.white,
           indicatorColor: appPalePurple,
         ),
-        progressIndicatorTheme: const ProgressIndicatorThemeData(
+
+        progressIndicatorTheme:
+            const ProgressIndicatorThemeData(
           color: appPrimaryColor,
         ),
       ),
+
       routes: {
         '/login': (_) => const LoginPage(),
         '/home': (_) => const UserShell(),
@@ -116,6 +144,8 @@ class EventTicketersApp extends StatelessWidget {
         '/admin/orders': (_) => const AdminOrdersPage(),
         '/admin/payments': (_) => const AdminPaymentsPage(),
       },
+
+      // Video intro tampil pertama kali.
       home: const VideoIntroPage(),
     );
   }
@@ -141,6 +171,7 @@ class _AppEntryState extends State<AppEntry> {
     DateTime startTime,
   ) async {
     const minimumDuration = Duration(seconds: 1);
+
     final elapsed = DateTime.now().difference(startTime);
     final remaining = minimumDuration - elapsed;
 
@@ -165,6 +196,7 @@ class _AppEntryState extends State<AppEntry> {
         await _ensureMinimumLoadingDuration(startTime);
 
         debugPrint('[AppEntry] Membuka LoginPage.');
+
         return const LoginPage();
       }
 
@@ -174,7 +206,9 @@ class _AppEntryState extends State<AppEntry> {
         const Duration(seconds: 20),
       );
 
-      debugPrint('[AppEntry] Data pengguna berhasil diambil.');
+      debugPrint(
+        '[AppEntry] Data pengguna berhasil diambil.',
+      );
 
       final role = user['role']?.toString().trim().toLowerCase();
 
@@ -183,16 +217,22 @@ class _AppEntryState extends State<AppEntry> {
       await _ensureMinimumLoadingDuration(startTime);
 
       if (role == 'admin') {
-        debugPrint('[AppEntry] Membuka AdminDashboardPage.');
+        debugPrint(
+          '[AppEntry] Membuka AdminDashboardPage.',
+        );
+
         return const AdminDashboardPage();
       }
 
       if (role == 'user') {
         debugPrint('[AppEntry] Membuka UserShell.');
+
         return const UserShell();
       }
 
-      debugPrint('[AppEntry] Role tidak valid, menghapus sesi.');
+      debugPrint(
+        '[AppEntry] Role tidak valid, menghapus sesi.',
+      );
 
       await ApiService.logout().timeout(
         const Duration(seconds: 5),
@@ -204,7 +244,8 @@ class _AppEntryState extends State<AppEntry> {
       debugPrintStack(stackTrace: stackTrace);
 
       return AppErrorView(
-        message: 'Koneksi terlalu lama. Periksa internet lalu coba lagi.',
+        message:
+            'Koneksi terlalu lama. Periksa internet lalu coba lagi.',
         onRetry: _retry,
       );
     } catch (e, stackTrace) {
@@ -219,14 +260,18 @@ class _AppEntryState extends State<AppEntry> {
           message.contains('kedaluwarsa');
 
       if (invalidSession) {
-        debugPrint('[AppEntry] Sesi tidak valid, kembali ke login.');
+        debugPrint(
+          '[AppEntry] Sesi tidak valid, kembali ke login.',
+        );
 
         try {
           await ApiService.logout().timeout(
             const Duration(seconds: 5),
           );
         } catch (logoutError) {
-          debugPrint('[AppEntry] Gagal menghapus sesi: $logoutError');
+          debugPrint(
+            '[AppEntry] Gagal menghapus sesi: $logoutError',
+          );
         }
 
         await _ensureMinimumLoadingDuration(startTime);
@@ -235,7 +280,8 @@ class _AppEntryState extends State<AppEntry> {
       }
 
       return AppErrorView(
-        message: 'Tidak dapat memuat sesi akun. Silakan coba lagi.',
+        message:
+            'Tidak dapat memuat sesi akun. Silakan coba lagi.',
         onRetry: _retry,
       );
     }
@@ -262,11 +308,13 @@ class _AppEntryState extends State<AppEntry> {
 
         if (snapshot.hasError || !snapshot.hasData) {
           debugPrint(
-            '[AppEntry] FutureBuilder menerima error: ${snapshot.error}',
+            '[AppEntry] FutureBuilder menerima error: '
+            '${snapshot.error}',
           );
 
           return AppErrorView(
-            message: 'Terjadi kesalahan saat membuka aplikasi.',
+            message:
+                'Terjadi kesalahan saat membuka aplikasi.',
             onRetry: _retry,
           );
         }
