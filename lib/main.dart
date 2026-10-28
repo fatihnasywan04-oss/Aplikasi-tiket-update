@@ -1,3 +1,4 @@
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -20,7 +21,14 @@ const Color appBackgroundColor = Color(0xFFF7F7FC);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('id_ID', null);
+
+  try {
+    await initializeDateFormatting('id_ID', null);
+  } catch (e, stackTrace) {
+    debugPrint('[Main] Gagal menginisialisasi format tanggal: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
   runApp(const EventTicketersApp());
 }
 
@@ -92,7 +100,7 @@ class EventTicketersApp extends StatelessWidget {
             ),
           ),
         ),
-        navigationBarTheme: NavigationBarThemeData(
+        navigationBarTheme: const NavigationBarThemeData(
           backgroundColor: Colors.white,
           indicatorColor: appPalePurple,
         ),
@@ -130,38 +138,92 @@ class _AppEntryState extends State<AppEntry> {
   }
 
   Future<Widget> _resolvePage() async {
-    final loggedIn = await ApiService.isLoggedIn();
-
-    if (!loggedIn) return const LoginPage();
+    debugPrint('[AppEntry] Memeriksa status login...');
 
     try {
-      final user = await ApiService.getMe();
+      final loggedIn = await ApiService.isLoggedIn().timeout(
+        const Duration(seconds: 10),
+      );
+
+      debugPrint('[AppEntry] Status login: $loggedIn');
+
+      if (!loggedIn) {
+        debugPrint('[AppEntry] Belum login, membuka LoginPage.');
+        return const LoginPage();
+      }
+
+      debugPrint('[AppEntry] Mengambil data pengguna...');
+
+      final user = await ApiService.getMe().timeout(
+        const Duration(seconds: 20),
+      );
+
+      debugPrint('[AppEntry] Data pengguna berhasil diambil.');
+
       final role = user['role']?.toString().trim().toLowerCase();
 
-      if (role == 'admin') return const AdminDashboardPage();
-      if (role == 'user') return const UserShell();
+      debugPrint('[AppEntry] Role pengguna: $role');
 
+      if (role == 'admin') {
+        debugPrint('[AppEntry] Membuka AdminDashboardPage.');
+        return const AdminDashboardPage();
+      }
+
+      if (role == 'user') {
+        debugPrint('[AppEntry] Membuka UserShell.');
+        return const UserShell();
+      }
+
+      debugPrint('[AppEntry] Role tidak valid, menghapus sesi.');
       await ApiService.logout();
+
       return const LoginPage();
-    } catch (e) {
+    } on TimeoutException catch (e, stackTrace) {
+      debugPrint('[AppEntry] Proses timeout: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
+      return AppErrorView(
+        message: 'Koneksi terlalu lama. Periksa internet lalu coba lagi.',
+        onRetry: _retry,
+      );
+    } catch (e, stackTrace) {
+      debugPrint('[AppEntry] Gagal membuka aplikasi: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
       final message = e.toString().toLowerCase();
+
       final invalidSession = message.contains('401') ||
           message.contains('unauthorized') ||
           message.contains('token') ||
           message.contains('kedaluwarsa');
 
       if (invalidSession) {
-        await ApiService.logout();
+        debugPrint('[AppEntry] Sesi tidak valid, kembali ke login.');
+
+        try {
+          await ApiService.logout().timeout(
+            const Duration(seconds: 5),
+          );
+        } catch (logoutError) {
+          debugPrint('[AppEntry] Gagal menghapus sesi: $logoutError');
+        }
+
         return const LoginPage();
       }
 
       return AppErrorView(
-        message: 'Tidak dapat memuat sesi akun.',
-        onRetry: () {
-          setState(() => _page = _resolvePage());
-        },
+        message: 'Tidak dapat memuat sesi akun. Silakan coba lagi.',
+        onRetry: _retry,
       );
     }
+  }
+
+  void _retry() {
+    if (!mounted) return;
+
+    setState(() {
+      _page = _resolvePage();
+    });
   }
 
   @override
@@ -170,13 +232,19 @@ class _AppEntryState extends State<AppEntry> {
       future: _page,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const AppLoading(message: 'Menyiapkan aplikasi...');
+          return const AppLoading(
+            message: 'Menyiapkan aplikasi...',
+          );
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
+          debugPrint(
+            '[AppEntry] FutureBuilder menerima error: ${snapshot.error}',
+          );
+
           return AppErrorView(
             message: 'Terjadi kesalahan saat membuka aplikasi.',
-            onRetry: () => setState(() => _page = _resolvePage()),
+            onRetry: _retry,
           );
         }
 
