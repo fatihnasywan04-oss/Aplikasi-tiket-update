@@ -11,6 +11,7 @@ import 'screens/admin/admin_payments_page.dart';
 import 'screens/user/user_shell.dart';
 import 'widgets/app_error_view.dart';
 import 'widgets/app_loading.dart';
+import 'video_intro_page.dart';
 
 const Color appPrimaryColor = Color(0xFF5B50E8);
 const Color appLightPurple = Color(0xFF9187FF);
@@ -107,7 +108,7 @@ class EventTicketersApp extends StatelessWidget {
         '/admin/orders': (_) => const AdminOrdersPage(),
         '/admin/payments': (_) => const AdminPaymentsPage(),
       },
-      home: const AppEntry(),
+      home: const VideoIntroPage(),
     );
   }
 }
