@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -15,6 +17,11 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   String? _error;
 
   List<Map<String, dynamic>> _orders = [];
+
+  final Map<int, Map<String, dynamic>> _eventCache = {};
+  final Map<String, Map<String, dynamic>> _ticketClassCache = {};
+
+  Timer? _timer;
 
   static const List<String> _months = [
     'Januari',
@@ -34,11 +41,27 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   @override
   void initState() {
     super.initState();
+
     _load();
+
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   // ============================================================
-  // LOAD ORDERS
+  // LOAD ORDERS DAN INFORMASI TAMBAHAN
   // ============================================================
 
   Future<void> _load() async {
@@ -52,6 +75,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     try {
       final orders = await ApiService.getMyOrders();
 
+      await _enrichOrders(orders);
+
       if (!mounted) return;
 
       setState(() {
@@ -62,11 +87,132 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       if (!mounted) return;
 
       setState(() {
-        _error = e
-            .toString()
-            .replaceFirst('Exception: ', '');
+        _error = e.toString().replaceFirst('Exception: ', '');
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _enrichOrders(
+    List<Map<String, dynamic>> orders,
+  ) async {
+    for (final order in orders) {
+      if (!mounted) return;
+
+      final existingEvent = _map(order['event']);
+
+      final existingClass = _map(
+        order['ticket_class'] ??
+            order['ticketClass'] ??
+            order['ticket_type'] ??
+            order['ticketType'],
+      );
+
+      final eventId = _int(
+        _firstValue([
+          order['event_id'],
+          order['eventId'],
+          existingEvent['id'],
+        ]),
+      );
+
+      final ticketClassId = _int(
+        _firstValue([
+          order['ticket_class_id'],
+          order['ticketClassId'],
+          existingClass['id'],
+          existingClass['ticket_class_id'],
+        ]),
+      );
+
+      // Muat detail event jika tanggal atau lokasi belum tersedia.
+      final hasEventDate = _hasAnyValue([
+        existingEvent['event_date'],
+        existingEvent['start_date'],
+        existingEvent['start_datetime'],
+        existingEvent['event_datetime'],
+        existingEvent['date'],
+      ]);
+
+      final hasLocation = _hasAnyValue([
+        existingEvent['location'],
+        existingEvent['venue'],
+        existingEvent['address'],
+        existingEvent['event_location'],
+      ]);
+
+      if (eventId != null &&
+          eventId > 0 &&
+          (!hasEventDate || !hasLocation || existingEvent.isEmpty)) {
+        try {
+          var event = _eventCache[eventId];
+
+          if (event == null) {
+            event = await ApiService.getEventById(eventId);
+            _eventCache[eventId] = event;
+          }
+
+          // Data dari API detail digunakan sebagai dasar.
+          // Data order yang sudah tersedia tetap dipertahankan.
+          order['event'] = {
+            ...event,
+            ...existingEvent,
+          };
+        } catch (_) {
+          // Jangan gagalkan seluruh halaman jika detail event gagal.
+        }
+      }
+
+      // Ambil kelas tiket jika nama atau harga belum tersedia.
+      final updatedClass = _map(
+        order['ticket_class'] ??
+            order['ticketClass'] ??
+            order['ticket_type'] ??
+            order['ticketType'],
+      );
+
+      final hasClassName = _hasAnyValue([
+        updatedClass['name'],
+        updatedClass['ticket_class_name'],
+        updatedClass['class_name'],
+        updatedClass['ticket_type'],
+        updatedClass['title'],
+        updatedClass['class_name_display'],
+      ]);
+
+      final hasClassPrice = _hasAnyValue([
+        updatedClass['price'],
+        updatedClass['ticket_price'],
+        updatedClass['unit_price'],
+      ]);
+
+      if (eventId != null &&
+          eventId > 0 &&
+          ticketClassId != null &&
+          ticketClassId > 0 &&
+          (!hasClassName || !hasClassPrice || updatedClass.isEmpty)) {
+        try {
+          final cacheKey = '${eventId}_$ticketClassId';
+
+          var ticketClass = _ticketClassCache[cacheKey];
+
+          if (ticketClass == null) {
+            ticketClass = await ApiService.getTicketClassById(
+              eventId: eventId,
+              ticketClassId: ticketClassId,
+            );
+
+            _ticketClassCache[cacheKey] = ticketClass;
+          }
+
+          order['ticket_class'] = {
+            ...ticketClass,
+            ...updatedClass,
+          };
+        } catch (_) {
+          // Informasi yang sudah tersedia tetap ditampilkan.
+        }
+      }
     }
   }
 
@@ -86,18 +232,27 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     return <String, dynamic>{};
   }
 
+  bool _isEmptyValue(dynamic value) {
+    if (value == null) return true;
+
+    if (value is String) {
+      final text = value.trim().toLowerCase();
+
+      return text.isEmpty ||
+          text == 'null' ||
+          text == 'none';
+    }
+
+    return false;
+  }
+
+  bool _hasAnyValue(List<dynamic> values) {
+    return values.any((value) => !_isEmptyValue(value));
+  }
+
   dynamic _firstValue(List<dynamic> values) {
     for (final value in values) {
-      if (value == null) continue;
-
-      if (value is String) {
-        final text = value.trim();
-
-        if (text.isEmpty || text.toLowerCase() == 'null') {
-          continue;
-        }
-      }
-
+      if (_isEmptyValue(value)) continue;
       return value;
     }
 
@@ -119,7 +274,9 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
         final text = value.toString().trim();
 
-        if (text.isNotEmpty && text.toLowerCase() != 'null') {
+        if (text.isNotEmpty &&
+            text.toLowerCase() != 'null' &&
+            text.toLowerCase() != 'none') {
           return text;
         }
       }
@@ -208,7 +365,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   // ============================================================
-  // STATUS
+  // STATUS PESANAN DAN PEMBAYARAN
   // ============================================================
 
   String _normalizeStatus(String status) {
@@ -240,6 +397,15 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }.contains(_normalizeStatus(status));
   }
 
+  bool _isPending(String status) {
+    return const {
+      'pending',
+      'unpaid',
+      'waiting_for_payment',
+      'waiting_payment',
+    }.contains(_normalizeStatus(status));
+  }
+
   String _statusLabel(String status) {
     switch (_normalizeStatus(status)) {
       case 'paid':
@@ -258,6 +424,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
       case 'pending':
       case 'unpaid':
+      case 'waiting_for_payment':
+      case 'waiting_payment':
         return 'Menunggu pembayaran';
 
       case 'cancelled':
@@ -286,13 +454,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   Color _statusColor(String status) {
-    if (_isPaid(status)) {
-      return AppColors.success;
-    }
-
-    if (_isFailed(status)) {
-      return AppColors.error;
-    }
+    if (_isPaid(status)) return AppColors.success;
+    if (_isFailed(status)) return AppColors.error;
 
     return AppColors.primary;
   }
@@ -307,7 +470,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       fallback: '',
     );
 
-    if (paymentStatus.isNotEmpty) {
+    // Status pembayaran yang lunas harus diutamakan.
+    if (paymentStatus.isNotEmpty && _isPaid(paymentStatus)) {
       return paymentStatus;
     }
 
@@ -317,22 +481,163 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       fallback: '',
     );
 
-    if (orderPaymentStatus.isNotEmpty) {
+    if (orderPaymentStatus.isNotEmpty &&
+        _isPaid(orderPaymentStatus)) {
       return orderPaymentStatus;
     }
 
-    // Backend menandai order.status = "paid" saat pembayaran sukses.
     final orderStatus = _text(
       [order],
       ['status', 'order_status'],
       fallback: 'unknown',
     );
 
-    if (_isPaid(orderStatus) || _isFailed(orderStatus)) {
-      return orderStatus;
+    if (_isPaid(orderStatus)) return orderStatus;
+
+    if (paymentStatus.isNotEmpty) return paymentStatus;
+
+    if (orderPaymentStatus.isNotEmpty) {
+      return orderPaymentStatus;
     }
 
     return orderStatus;
+  }
+
+  // ============================================================
+  // BATAS WAKTU PEMBAYARAN
+  // ============================================================
+
+  DateTime? _expirationTime(
+    Map<String, dynamic> order,
+    Map<String, dynamic> payment,
+  ) {
+    final value = _firstValue([
+      order['expires_at'],
+      order['expiration_time'],
+      order['expiresAt'],
+      payment['expires_at'],
+      payment['expiration_time'],
+      payment['expiresAt'],
+    ]);
+
+    final parsed = _parseDate(value);
+
+    if (parsed == null) return null;
+
+    return parsed.toLocal();
+  }
+
+  Duration? _remainingTime(DateTime? expiration) {
+    if (expiration == null) return null;
+
+    final remaining = expiration.difference(DateTime.now());
+
+    if (remaining.isNegative) {
+      return Duration.zero;
+    }
+
+    return remaining;
+  }
+
+  String _countdownLabel(Duration remaining) {
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds % 60;
+
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
+  }
+
+  bool _canPay({
+    required String paymentStatus,
+    required String orderStatus,
+    required DateTime? expiration,
+  }) {
+    if (_isPaid(paymentStatus) || _isPaid(orderStatus)) {
+      return false;
+    }
+
+    if (_isFailed(paymentStatus) || _isFailed(orderStatus)) {
+      return false;
+    }
+
+    if (!_isPending(paymentStatus) && !_isPending(orderStatus)) {
+      return false;
+    }
+
+    // Tanpa waktu kedaluwarsa, jangan tampilkan tombol bayar.
+    if (expiration == null) return false;
+
+    return expiration.isAfter(DateTime.now());
+  }
+
+  // ============================================================
+  // NAVIGASI PEMBAYARAN
+  // ============================================================
+
+  Future<void> _payNow(
+    Map<String, dynamic> order,
+    int orderId,
+  ) async {
+    final payment = _map(
+      order['payment'] ??
+          order['latest_payment'] ??
+          order['latestPayment'],
+    );
+
+    final status = _paymentStatus(order, payment);
+
+    final orderStatus = _text(
+      [order],
+      ['status', 'order_status'],
+      fallback: 'unknown',
+    );
+
+    final expiration = _expirationTime(order, payment);
+
+    if (!_canPay(
+      paymentStatus: status,
+      orderStatus: orderStatus,
+      expiration: expiration,
+    )) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Waktu pembayaran sudah habis atau pesanan '
+            'tidak lagi menunggu pembayaran.',
+          ),
+        ),
+      );
+
+      await _load();
+      return;
+    }
+
+    try {
+      await Navigator.of(context).pushNamed(
+        '/payment',
+        arguments: {
+          'orderId': orderId,
+          'order': order,
+        },
+      );
+
+      if (mounted) {
+        await _load();
+      }
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Halaman pembayaran belum terhubung. '
+            'Periksa route /payment di aplikasi.',
+          ),
+        ),
+      );
+    }
   }
 
   // ============================================================
@@ -426,6 +731,102 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     );
   }
 
+  Widget _paymentAction({
+    required Map<String, dynamic> order,
+    required int orderId,
+    required String paymentStatus,
+    required String orderStatus,
+    required DateTime? expiration,
+  }) {
+    final remaining = _remainingTime(expiration);
+
+    final canPay = _canPay(
+      paymentStatus: paymentStatus,
+      orderStatus: orderStatus,
+      expiration: expiration,
+    );
+
+    if (canPay && remaining != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.timer_outlined,
+                  size: 19,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Sisa waktu pembayaran',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Text(
+                  _countdownLabel(remaining),
+                  style: TextStyle(
+                    color: remaining.inSeconds <= 10
+                        ? AppColors.error
+                        : AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () => _payNow(order, orderId),
+              icon: const Icon(Icons.payment_rounded),
+              label: const Text('Bayar Sekarang'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!_isPaid(paymentStatus) &&
+        !_isPaid(orderStatus) &&
+        expiration != null &&
+        !expiration.isAfter(DateTime.now())) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.error.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Text(
+            'Waktu pembayaran telah habis. '
+            'Silakan buat pesanan baru jika masih ingin membeli tiket.',
+            style: TextStyle(
+              color: AppColors.error,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
   // ============================================================
   // ORDER CARD
   // ============================================================
@@ -434,7 +835,10 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     final event = _map(order['event']);
 
     final ticketClass = _map(
-      order['ticket_class'] ?? order['ticketClass'],
+      order['ticket_class'] ??
+          order['ticketClass'] ??
+          order['ticket_type'] ??
+          order['ticketType'],
     );
 
     final payment = _map(
@@ -443,10 +847,22 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           order['latestPayment'],
     );
 
-    final orderId = _firstValue([
-      order['id'],
-      order['order_id'],
-    ]);
+    // Data pemesan bisa berada di beberapa bentuk respons API.
+    final buyer = _map(
+      order['user'] ??
+          order['buyer'] ??
+          order['customer'] ??
+          order['customer_info'] ??
+          order['customerInfo'] ??
+          order['purchaser'],
+    );
+
+    final orderId = _int(
+      _firstValue([
+        order['id'],
+        order['order_id'],
+      ]),
+    );
 
     final eventName = _text(
       [event, order],
@@ -463,9 +879,14 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     final eventDateValue = _firstValue([
       event['event_date'],
       event['start_date'],
+      event['start_datetime'],
+      event['event_datetime'],
+      event['event_start'],
+      event['start_time'],
       event['date'],
       order['event_date'],
       order['start_date'],
+      order['event_start'],
     ]);
 
     final eventDate = _eventDate(eventDateValue);
@@ -481,13 +902,29 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       ],
     );
 
+    // Prioritaskan nama kelas sebenarnya seperti VIP, Standard, VVIP.
     final ticketClassName = _text(
-      [ticketClass, order],
+      [
+        ticketClass,
+        order,
+        event,
+      ],
       [
         'name',
         'ticket_class_name',
+        'ticketClassName',
         'class_name',
+        'className',
         'ticket_type',
+        'ticketType',
+        'ticket_class_title',
+        'class_name_display',
+        'category_name',
+        'category',
+        'type_name',
+        'tier_name',
+        'title',
+        'nama_kelas',
       ],
       fallback: 'Kelas tiket #${order['ticket_class_id'] ?? '-'}',
     );
@@ -496,6 +933,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           _firstValue([
             order['quantity'],
             order['ticket_quantity'],
+            order['ticketQuantity'],
           ]),
         ) ??
         0;
@@ -504,11 +942,14 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       order['total_price'],
       order['total_amount'],
       order['total'],
+      order['amount'],
       payment['amount'],
     ]);
 
     final unitPrice = _firstValue([
       ticketClass['price'],
+      ticketClass['ticket_price'],
+      ticketClass['unit_price'],
       order['ticket_price'],
       order['unit_price'],
       order['price'],
@@ -528,6 +969,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
     final paymentStatus = _paymentStatus(order, payment);
 
+    final expiration = _expirationTime(order, payment);
+
     final paymentMethod = _text(
       [payment, order],
       ['payment_method', 'method'],
@@ -540,18 +983,38 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       fallback: '',
     );
 
-    final buyer = _map(order['user']);
-
+    // Ambil nama/email dari objek user terlebih dahulu,
+    // lalu gunakan field langsung pada order sebagai cadangan.
     final buyerName = _text(
-      [buyer],
-      ['name', 'full_name', 'username'],
-      fallback: '-',
+      [
+        buyer,
+        order,
+      ],
+      [
+        'full_name',
+        'user_name',
+        'buyer_name',
+        'customer_name',
+        'purchaser_name',
+        'name',
+        'username',
+        'nama_pemesan',
+      ],
     );
 
     final buyerEmail = _text(
-      [buyer],
-      ['email'],
-      fallback: '-',
+      [
+        buyer,
+        order,
+      ],
+      [
+        'email',
+        'user_email',
+        'buyer_email',
+        'customer_email',
+        'purchaser_email',
+        'email_pemesan',
+      ],
     );
 
     final imageUrl = _text(
@@ -604,7 +1067,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Pesanan #$orderId',
+                'Pesanan #${orderId ?? '-'}',
                 style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,
@@ -645,7 +1108,10 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
             'Informasi tiket',
             Icons.confirmation_number_outlined,
           ),
-          _detailRow('Nomor pesanan', '#$orderId'),
+          _detailRow(
+            'Nomor pesanan',
+            '#${orderId ?? '-'}',
+          ),
           _detailRow('Kelas tiket', ticketClassName),
           _detailRow('Jumlah tiket', '$quantity tiket'),
           _detailRow('Harga satuan', _money(unitPrice)),
@@ -685,6 +1151,15 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
           if (transactionId.isNotEmpty)
             _detailRow('ID transaksi', transactionId),
+
+          if (orderId != null)
+            _paymentAction(
+              order: order,
+              orderId: orderId,
+              paymentStatus: paymentStatus,
+              orderStatus: orderStatus,
+              expiration: expiration,
+            ),
         ],
       ),
     );
