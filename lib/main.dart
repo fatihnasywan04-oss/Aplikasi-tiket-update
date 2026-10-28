@@ -136,7 +136,21 @@ class _AppEntryState extends State<AppEntry> {
     _page = _resolvePage();
   }
 
+  Future<void> _ensureMinimumLoadingDuration(
+    DateTime startTime,
+  ) async {
+    const minimumDuration = Duration(seconds: 1);
+    final elapsed = DateTime.now().difference(startTime);
+    final remaining = minimumDuration - elapsed;
+
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
+    }
+  }
+
   Future<Widget> _resolvePage() async {
+    final startTime = DateTime.now();
+
     debugPrint('[AppEntry] Memeriksa status login...');
 
     try {
@@ -147,7 +161,9 @@ class _AppEntryState extends State<AppEntry> {
       debugPrint('[AppEntry] Status login: $loggedIn');
 
       if (!loggedIn) {
-        debugPrint('[AppEntry] Belum login, membuka LoginPage.');
+        await _ensureMinimumLoadingDuration(startTime);
+
+        debugPrint('[AppEntry] Membuka LoginPage.');
         return const LoginPage();
       }
 
@@ -163,6 +179,8 @@ class _AppEntryState extends State<AppEntry> {
 
       debugPrint('[AppEntry] Role pengguna: $role');
 
+      await _ensureMinimumLoadingDuration(startTime);
+
       if (role == 'admin') {
         debugPrint('[AppEntry] Membuka AdminDashboardPage.');
         return const AdminDashboardPage();
@@ -174,7 +192,10 @@ class _AppEntryState extends State<AppEntry> {
       }
 
       debugPrint('[AppEntry] Role tidak valid, menghapus sesi.');
-      await ApiService.logout();
+
+      await ApiService.logout().timeout(
+        const Duration(seconds: 5),
+      );
 
       return const LoginPage();
     } on TimeoutException catch (e, stackTrace) {
@@ -206,6 +227,8 @@ class _AppEntryState extends State<AppEntry> {
         } catch (logoutError) {
           debugPrint('[AppEntry] Gagal menghapus sesi: $logoutError');
         }
+
+        await _ensureMinimumLoadingDuration(startTime);
 
         return const LoginPage();
       }
