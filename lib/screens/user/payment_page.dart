@@ -31,7 +31,7 @@ class _PaymentPageState extends State<PaymentPage> {
   String? _paymentError;
   Timer? _countdownTimer;
   DateTime? _deadline;
-  Duration _remaining = const Duration(seconds: 30);
+  Duration _remaining = const Duration(seconds: 60);
   bool _expired = false;
   bool _refreshingExpiredOrder = false;
 
