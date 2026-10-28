@@ -19,6 +19,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   List<Map<String, dynamic>> _orders = [];
 
   final Map<int, Map<String, dynamic>> _eventCache = {};
+  final Map<int, List<Map<String, dynamic>>> _ticketClassesCache = {};
   final Map<String, Map<String, dynamic>> _ticketClassCache = {};
 
   Timer? _timer;
@@ -43,11 +44,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     super.initState();
     _load();
 
-    // Perbarui countdown setiap detik.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) setState(() {});
     });
   }
 
@@ -102,16 +100,19 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
       final existingEvent = _map(order['event']);
 
-      final existingClass = _map(
-        order['ticket_class'] ?? order['ticketClass'],
-      );
-
       final eventId = _int(
         _firstValue([
           order['event_id'],
           order['eventId'],
           existingEvent['id'],
+          existingEvent['event_id'],
         ]),
+      );
+
+      final existingClass = _map(
+        order['ticket_class'] ??
+            order['ticketClass'] ??
+            order['ticket_class_detail'],
       );
 
       final ticketClassId = _int(
@@ -119,73 +120,141 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           order['ticket_class_id'],
           order['ticketClassId'],
           existingClass['id'],
+          existingClass['ticket_class_id'],
         ]),
       );
 
-      // Ambil detail event jika data event belum lengkap.
-      final needsEvent = existingEvent.isEmpty ||
-          (_isEmptyValue(existingEvent['event_date']) &&
-              _isEmptyValue(existingEvent['start_date']) &&
-              _isEmptyValue(existingEvent['date'])) ||
-          (_isEmptyValue(existingEvent['location']) &&
-              _isEmptyValue(existingEvent['venue']) &&
-              _isEmptyValue(existingEvent['address']));
+      // --------------------------------------------------------
+      // EVENT
+      // --------------------------------------------------------
 
-      if (eventId != null && eventId > 0 && needsEvent) {
-        try {
-          var fetchedEvent = _eventCache[eventId];
+      if (eventId != null && eventId > 0) {
+        final needsEvent = existingEvent.isEmpty ||
+            _isEmptyValue(existingEvent['title']) ||
+            (_isEmptyValue(existingEvent['event_date']) &&
+                _isEmptyValue(existingEvent['start_date']) &&
+                _isEmptyValue(existingEvent['date'])) ||
+            (_isEmptyValue(existingEvent['location']) &&
+                _isEmptyValue(existingEvent['venue']) &&
+                _isEmptyValue(existingEvent['address']));
 
-          if (fetchedEvent == null) {
-            fetchedEvent = await ApiService.getEventById(eventId);
-            _eventCache[eventId] = fetchedEvent;
+        if (needsEvent) {
+          try {
+            var fetchedEvent = _eventCache[eventId];
+
+            if (fetchedEvent == null) {
+              fetchedEvent = await ApiService.getEventById(eventId);
+              _eventCache[eventId] = fetchedEvent;
+            }
+
+            // Data event dari order tetap dipertahankan sebagai fallback.
+            order['event'] = {
+              ...fetchedEvent,
+              ...existingEvent,
+            };
+          } catch (_) {
+            // Data pesanan tetap dapat ditampilkan jika event gagal dimuat.
           }
-
-          // Pertahankan data event yang sudah tersedia pada pesanan.
-          order['event'] = {
-            ...fetchedEvent,
-            ...existingEvent,
-          };
-        } catch (_) {
-          // Informasi pesanan tetap ditampilkan jika event gagal dimuat.
         }
       }
 
-      // Periksa kembali kelas tiket setelah pemuatan event.
-      final currentClass = _map(
-        order['ticket_class'] ?? order['ticketClass'],
-      );
+      // --------------------------------------------------------
+      // KELAS TIKET
+      //
+      // Jangan hanya mengambil kelas tiket ketika nama kosong.
+      // Data kelas tiket harus dicocokkan berdasarkan ID.
+      // --------------------------------------------------------
 
-      final needsClass = currentClass.isEmpty ||
-          _isEmptyValue(currentClass['name']) ||
-          _isEmptyValue(currentClass['price']);
+      if (eventId == null ||
+          eventId <= 0 ||
+          ticketClassId == null ||
+          ticketClassId <= 0) {
+        // Jangan membuat nama VIP/Standard berdasarkan tebakan.
+        // Nama kelas akan menggunakan data yang memang tersedia.
+        continue;
+      }
 
-      if (eventId != null &&
-          eventId > 0 &&
-          ticketClassId != null &&
-          ticketClassId > 0 &&
-          needsClass) {
-        try {
-          final cacheKey = '${eventId}_$ticketClassId';
+      final cacheKey = '${eventId}_$ticketClassId';
 
-          var fetchedClass = _ticketClassCache[cacheKey];
+      Map<String, dynamic>? matchedClass;
 
-          if (fetchedClass == null) {
-            fetchedClass = await ApiService.getTicketClassById(
+      try {
+        // 1. Periksa cache berdasarkan event dan ID kelas.
+        matchedClass = _ticketClassCache[cacheKey];
+
+        // 2. Jika belum ada, ambil daftar kelas tiket event.
+        if (matchedClass == null) {
+          var ticketClasses = _ticketClassesCache[eventId];
+
+          if (ticketClasses == null) {
+            ticketClasses =
+                await ApiService.getTicketClasses(eventId);
+
+            _ticketClassesCache[eventId] = ticketClasses;
+          }
+
+          // Cocokkan ID kelas tiket secara eksplisit.
+          for (final item in ticketClasses) {
+            final itemId = _int(
+              _firstValue([
+                item['id'],
+                item['ticket_class_id'],
+                item['ticketClassId'],
+              ]),
+            );
+
+            if (itemId == ticketClassId) {
+              matchedClass = item;
+              break;
+            }
+          }
+        }
+
+        // 3. Jika tidak ditemukan dari daftar, coba endpoint detail.
+        if (matchedClass == null) {
+          try {
+            final fetchedClass = await ApiService.getTicketClassById(
               eventId: eventId,
               ticketClassId: ticketClassId,
             );
 
-            _ticketClassCache[cacheKey] = fetchedClass;
-          }
+            final fetchedId = _int(
+              _firstValue([
+                fetchedClass['id'],
+                fetchedClass['ticket_class_id'],
+                fetchedClass['ticketClassId'],
+              ]),
+            );
 
-          // Data kelas dari API menjadi sumber utama.
-          // Data kelas lama dipakai sebagai fallback.
+            // Jangan memakai hasil detail jika ID-nya berbeda.
+            if (fetchedId == ticketClassId) {
+              matchedClass = fetchedClass;
+            }
+          } catch (_) {
+            // Tetap gunakan data kelas dari order sebagai fallback.
+          }
+        }
+
+        if (matchedClass != null) {
+          _ticketClassCache[cacheKey] = matchedClass;
+
+          // Data API yang cocok dengan ID menjadi sumber utama.
+          // Data dari order hanya menjadi fallback.
           order['ticket_class'] = {
-            ...currentClass,
-            ...fetchedClass,
+            ...existingClass,
+            ...matchedClass,
           };
-        } catch (_) {
-          // Tetap gunakan data kelas yang sudah tersedia.
+        } else {
+          // Pertahankan objek kelas yang sudah disediakan backend.
+          // Jangan mengganti nama yang valid dengan "Kelas tiket #ID".
+          if (existingClass.isNotEmpty) {
+            order['ticket_class'] = existingClass;
+          }
+        }
+      } catch (_) {
+        // Gagal memperkaya kelas tiket tidak boleh menghapus order.
+        if (existingClass.isNotEmpty) {
+          order['ticket_class'] = existingClass;
         }
       }
     }
@@ -254,7 +323,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   int? _int(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
-
     if (value == null) return null;
 
     return int.tryParse(value.toString().trim());
@@ -262,7 +330,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
   double? _number(dynamic value) {
     if (value is num) return value.toDouble();
-
     if (value == null) return null;
 
     final text = value.toString().trim();
@@ -276,7 +343,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
   String _money(dynamic value) {
     final amount = _number(value);
-
     if (amount == null) return '-';
 
     final rounded = amount.round();
@@ -308,7 +374,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
   String _dateTime(dynamic value) {
     final parsed = _parseDate(value);
-
     if (parsed == null) return '-';
 
     final date = parsed.toLocal();
@@ -321,7 +386,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
   String _eventDate(dynamic value) {
     final parsed = _parseDate(value);
-
     if (parsed == null) return '-';
 
     final date = parsed.toLocal();
@@ -456,12 +520,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     );
 
     if (_isPaid(orderStatus)) return orderStatus;
-
     if (paymentStatus.isNotEmpty) return paymentStatus;
-
-    if (orderPaymentStatus.isNotEmpty) {
-      return orderPaymentStatus;
-    }
+    if (orderPaymentStatus.isNotEmpty) return orderPaymentStatus;
 
     return orderStatus;
   }
@@ -484,7 +544,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     ]);
 
     final parsed = _parseDate(value);
-
     if (parsed == null) return null;
 
     return parsed.toLocal();
@@ -495,11 +554,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
     final remaining = expiration.difference(DateTime.now());
 
-    if (remaining.isNegative) {
-      return Duration.zero;
-    }
-
-    return remaining;
+    return remaining.isNegative ? Duration.zero : remaining;
   }
 
   String _countdownLabel(Duration remaining) {
@@ -585,9 +640,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
         },
       );
 
-      if (mounted) {
-        await _load();
-      }
+      if (mounted) await _load();
     } catch (_) {
       if (!mounted) return;
 
@@ -633,8 +686,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               value,
               style: TextStyle(
                 color: AppColors.text,
-                fontWeight:
-                    bold ? FontWeight.bold : FontWeight.w500,
+                fontWeight: bold ? FontWeight.bold : FontWeight.w500,
                 fontSize: 13,
               ),
             ),
@@ -649,11 +701,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       padding: const EdgeInsets.only(top: 18, bottom: 4),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 19,
-            color: AppColors.primary,
-          ),
+          Icon(icon, size: 19, color: AppColors.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -755,9 +803,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 14,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ],
@@ -801,7 +847,9 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     final event = _map(order['event']);
 
     final ticketClass = _map(
-      order['ticket_class'] ?? order['ticketClass'],
+      order['ticket_class'] ??
+          order['ticketClass'] ??
+          order['ticket_class_detail'],
     );
 
     final payment = _map(
@@ -819,12 +867,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
     final eventName = _text(
       [event, order],
-      [
-        'title',
-        'event_title',
-        'event_name',
-        'nama_event',
-      ],
+      ['title', 'event_title', 'event_name', 'nama_event'],
       fallback: 'Event tidak diketahui',
     );
 
@@ -854,9 +897,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       ],
     );
 
-    // PENTING:
-    // Nama kelas tiket hanya dicari di objek ticketClass.
-    // Jangan gunakan order['name'] karena dapat berisi nama event.
+    // Ambil nama dari objek kelas tiket yang sudah dicocokkan.
+    // Jika objek belum memiliki nama, gunakan ID sebagai fallback.
     final ticketClassName = _text(
       [ticketClass],
       [
@@ -907,7 +949,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     );
 
     final paymentStatus = _paymentStatus(order, payment);
-
     final expiration = _expirationTime(order, payment);
 
     final paymentMethod = _text(
@@ -922,11 +963,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       fallback: '',
     );
 
-    // Ambil data pemesan dari objek user atau field pada order.
     final buyer = _map(
-      order['user'] ??
-          order['buyer'] ??
-          order['customer'],
+      order['user'] ?? order['buyer'] ?? order['customer'],
     );
 
     final buyerName = _text(
@@ -968,12 +1006,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           horizontal: 16,
           vertical: 8,
         ),
-        childrenPadding: const EdgeInsets.fromLTRB(
-          16,
-          0,
-          16,
-          18,
-        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
         leading: Container(
           width: 48,
           height: 48,
@@ -1032,10 +1065,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               ),
             ),
 
-          _sectionTitle(
-            'Informasi event',
-            Icons.event_rounded,
-          ),
+          _sectionTitle('Informasi event', Icons.event_rounded),
           _detailRow('Nama event', eventName),
           _detailRow('Tanggal event', eventDate),
           _detailRow('Lokasi', location),
@@ -1044,10 +1074,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
             'Informasi tiket',
             Icons.confirmation_number_outlined,
           ),
-          _detailRow(
-            'Nomor pesanan',
-            '#${orderId ?? '-'}',
-          ),
+          _detailRow('Nomor pesanan', '#${orderId ?? '-'}'),
           _detailRow('Kelas tiket', ticketClassName),
           _detailRow('Jumlah tiket', '$quantity tiket'),
           _detailRow('Harga satuan', _money(unitPrice)),
@@ -1068,14 +1095,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           _detailRow('Nama pemesan', buyerName),
           _detailRow('Email pemesan', buyerEmail),
 
-          _sectionTitle(
-            'Informasi pembayaran',
-            Icons.payment_rounded,
-          ),
-          _detailRow(
-            'Status pesanan',
-            _statusLabel(orderStatus),
-          ),
+          _sectionTitle('Informasi pembayaran', Icons.payment_rounded),
+          _detailRow('Status pesanan', _statusLabel(orderStatus)),
           _detailRow(
             'Status pembayaran',
             _statusLabel(paymentStatus),
@@ -1111,9 +1132,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       appBar: AppBar(
         title: const Text(
           'Tiket Saya',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
@@ -1173,8 +1192,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                       onRefresh: _load,
                       color: AppColors.primary,
                       child: ListView(
-                        physics:
-                            const AlwaysScrollableScrollPhysics(),
+                        physics: const AlwaysScrollableScrollPhysics(),
                         children: const [
                           SizedBox(height: 140),
                           Icon(
@@ -1210,8 +1228,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                       onRefresh: _load,
                       color: AppColors.primary,
                       child: ListView.separated(
-                        physics:
-                            const AlwaysScrollableScrollPhysics(),
+                        physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.all(20),
                         itemCount: _orders.length,
                         separatorBuilder: (context, index) =>
