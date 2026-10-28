@@ -27,10 +27,3 @@ flutter:
 
   assets:
     - assets/videos/loading.mp4
-
-flutter_native_splash:
-  color: "#F7F7FC"
-  android: true
-  ios: true
-  web: true
-  fullscreen: true
