@@ -14,10 +14,9 @@ class ApiService {
 
   static const Duration _timeout = Duration(seconds: 20);
 
-  /// Batas waktu simulasi pembayaran.
-  /// Batas resmi tetap mengikuti expires_at dari backend.
-  static const Duration paymentExpiration =
-      Duration(seconds: 30);
+  /// Batas pembayaran simulasi.
+  /// Waktu resmi tetap mengikuti expires_at dari backend.
+  static const Duration paymentExpiration = Duration(seconds: 60);
 
   static const String _tokenKey = 'access_token';
   static const String _userIdKey = 'user_id';
@@ -80,6 +79,14 @@ class ApiService {
           return item.toString();
         }).join('\n');
       }
+
+      if (detail is Map) {
+        return detail.toString();
+      }
+    }
+
+    if (result is String && result.trim().isNotEmpty) {
+      return result.trim();
     }
 
     return 'Permintaan tidak dapat diproses oleh server.';
@@ -101,21 +108,7 @@ class ApiService {
           );
         }
 
-        result = null;
-      }
-    }
-
-    if (kDebugMode) {
-      debugPrint(
-        '[ApiService] HTTP ${response.statusCode} '
-        '${response.request?.url.path ?? ''}',
-      );
-
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300) {
-        debugPrint(
-          '[ApiService] Error response: ${response.body}',
-        );
+        result = response.body;
       }
     }
 
@@ -174,7 +167,17 @@ class ApiService {
       final response = await request().timeout(_timeout);
       final result = _decodeResponse(response);
 
-      return result as T;
+      if (result is T) {
+        return result;
+      }
+
+      if (result == null && T == dynamic) {
+        return result as T;
+      }
+
+      throw Exception(
+        'Tipe respons server tidak sesuai dengan yang diharapkan.',
+      );
     } on TimeoutException {
       throw Exception(
         'Koneksi ke server terlalu lama. Periksa jaringan.',
@@ -185,9 +188,7 @@ class ApiService {
       );
     } on http.ClientException catch (error) {
       if (kDebugMode) {
-        debugPrint(
-          '[ApiService] Network error: $error',
-        );
+        debugPrint('ApiService network error: $error');
       }
 
       throw Exception(
@@ -201,9 +202,7 @@ class ApiService {
       if (error is Exception) rethrow;
 
       if (kDebugMode) {
-        debugPrint(
-          '[ApiService] Error: $error',
-        );
+        debugPrint('ApiService error: $error');
       }
 
       throw Exception(
@@ -233,11 +232,6 @@ class ApiService {
     Map<String, String>? headers,
     Map<String, dynamic>? body,
   }) async {
-    if (kDebugMode) {
-      // Jangan mencetak header Authorization atau token.
-      debugPrint('[ApiService] POST $path');
-    }
-
     return _request<dynamic>(
       () => http.post(
         Uri.parse('$baseUrl$path'),
@@ -291,7 +285,9 @@ class ApiService {
     dynamic current = value;
 
     for (int depth = 0; depth < 6; depth++) {
-      if (current is! Map) break;
+      if (current is! Map) {
+        break;
+      }
 
       if (current['data'] is Map) {
         current = current['data'];
@@ -304,13 +300,7 @@ class ApiService {
     return _map(current);
   }
 
-  /// Mendukung:
-  /// [...]
-  /// {"items": [...]}
-  /// {"data": [...]}
-  /// {"data": {"results": [...]}}
-  /// {"orders": [...]}
-  /// {"payments": [...]}
+  /// Mendukung respons list langsung atau dalam wrapper API.
   static List<Map<String, dynamic>> _list(dynamic value) {
     dynamic current = value;
 
@@ -346,12 +336,16 @@ class ApiService {
         }
       }
 
-      if (!found) break;
+      if (!found) {
+        break;
+      }
 
       current = next;
     }
 
-    if (current == null) return [];
+    if (current == null) {
+      return [];
+    }
 
     throw Exception(
       'Server tidak mengembalikan daftar data '
@@ -387,7 +381,6 @@ class ApiService {
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
-
     return prefs.getString(_tokenKey);
   }
 
@@ -400,35 +393,31 @@ class ApiService {
 
     await prefs.setInt(_userIdKey, userId);
     await prefs.setString(_usernameKey, username);
-    await prefs.setString(_roleKey, role.toLowerCase());
+    await prefs.setString(_roleKey, role.trim().toLowerCase());
   }
 
   static Future<int?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
-
     return prefs.getInt(_userIdKey);
   }
 
   static Future<String?> getUsername() async {
     final prefs = await SharedPreferences.getInstance();
-
     return prefs.getString(_usernameKey);
   }
 
   static Future<String?> getRole() async {
     final prefs = await SharedPreferences.getInstance();
-
     return prefs.getString(_roleKey);
   }
 
   static Future<bool> isLoggedIn() async {
     final token = await getToken();
-
     return token != null && token.trim().isNotEmpty;
   }
 
   static Future<bool> isAdmin() async {
-    return (await getRole())?.toLowerCase() == 'admin';
+    return (await getRole())?.trim().toLowerCase() == 'admin';
   }
 
   static Future<void> logout() async {
@@ -647,6 +636,7 @@ class ApiService {
     }
   }
 
+  /// Endpoint FastAPI: GET /events/{event_id}/ticket-classes/
   static Future<List<Map<String, dynamic>>> getTicketClasses(
     int eventId,
   ) async {
@@ -784,10 +774,8 @@ class ApiService {
       ),
     );
 
-    final currentStock = _parseInt(
-          ticketClass['available_tickets'],
-        ) ??
-        0;
+    final currentStock =
+        _parseInt(ticketClass['available_tickets']) ?? 0;
 
     return updateTicketClass(
       eventId: eventId,
@@ -834,30 +822,17 @@ class ApiService {
       );
     }
 
-    final result = await _post(
-      '/orders/',
-      headers: await _authHeaders(),
-      body: {
-        'event_id': eventId,
-        'ticket_class_id': ticketClassId,
-        'quantity': quantity,
-      },
+    return _unwrapMap(
+      await _post(
+        '/orders/',
+        headers: await _authHeaders(),
+        body: {
+          'event_id': eventId,
+          'ticket_class_id': ticketClassId,
+          'quantity': quantity,
+        },
+      ),
     );
-
-    final order = _unwrapMap(result);
-
-    if (kDebugMode) {
-      debugPrint('[ApiService] Pesanan berhasil dibuat.');
-      debugPrint(
-        '[ApiService] Order ID: '
-        '${order['id'] ?? order['order_id']}',
-      );
-      debugPrint(
-        '[ApiService] Status: ${order['status']}',
-      );
-    }
-
-    return order;
   }
 
   static Future<List<Map<String, dynamic>>> getMyOrders() async {
@@ -874,11 +849,10 @@ class ApiService {
         'Jumlah pesanan: ${orders.length}',
       );
 
-      for (final order in orders) {
+      if (orders.isNotEmpty) {
         debugPrint(
-          '[ApiService] Order ID: ${order['id']}, '
-          'Event: ${order['event_title']}, '
-          'Status: ${order['status']}',
+          '[ApiService] ID pesanan pertama: '
+          '${orders.first['id'] ?? orders.first['order_id']}',
         );
       }
     }
@@ -945,8 +919,14 @@ class ApiService {
       throw Exception('ID pesanan tidak valid.');
     }
 
-    if (!methods.contains(paymentMethod)) {
-      throw Exception('Metode pembayaran tidak valid.');
+    final normalizedMethod =
+        paymentMethod.trim().toLowerCase();
+
+    if (!methods.contains(normalizedMethod)) {
+      throw Exception(
+        'Metode pembayaran tidak valid. '
+        'Gunakan transfer_bank, e_wallet, atau qris.',
+      );
     }
 
     final provider = paymentProvider.trim();
@@ -963,7 +943,7 @@ class ApiService {
         headers: await _authHeaders(),
         body: {
           'order_id': orderId,
-          'payment_method': paymentMethod,
+          'payment_method': normalizedMethod,
           'payment_provider': provider,
         },
       ),
@@ -971,7 +951,8 @@ class ApiService {
   }
 
   /// Endpoint simulasi: POST /payments/{payment_id}/confirm.
-  /// Jangan gunakan konfirmasi simulasi untuk pembayaran nyata.
+  /// Backend mengembalikan payment_status dan order_status
+  /// di level teratas, bukan di dalam objek payment.
   static Future<Map<String, dynamic>> confirmPayment({
     required int paymentId,
   }) async {
@@ -988,23 +969,14 @@ class ApiService {
     );
   }
 
-  /// Backend yang kita bahas menggunakan GET /payments/my.
+  /// Endpoint backend: GET /payments/my.
   static Future<List<Map<String, dynamic>>> getMyPayments() async {
-    final result = await _get(
-      '/payments/my',
-      headers: await _authHeaders(),
+    return _list(
+      await _get(
+        '/payments/my',
+        headers: await _authHeaders(),
+      ),
     );
-
-    final payments = _list(result);
-
-    if (kDebugMode) {
-      debugPrint(
-        '[ApiService] GET /payments/my berhasil. '
-        'Jumlah pembayaran: ${payments.length}',
-      );
-    }
-
-    return payments;
   }
 
   // ============================================================
@@ -1023,7 +995,7 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> getAdminOrders() async {
     return _list(
       await _get(
-        '/admin/orders',
+        '/orders/admin/all',
         headers: await _adminHeaders(),
       ),
     );
