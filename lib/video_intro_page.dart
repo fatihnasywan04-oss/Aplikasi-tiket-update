@@ -31,14 +31,17 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
   void initState() {
     super.initState();
 
+    // Aktifkan fullscreen.
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.immersiveSticky,
     );
 
+    // Siapkan video intro.
     _controller = VideoPlayerController.asset(
       'assets/videos/loading.mp4',
     );
 
+    // Tangani video yang terlalu lama dimuat.
     _initializationTimer = Timer(
       const Duration(seconds: 10),
       () {
@@ -101,6 +104,7 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
       return;
     }
 
+    // Buka aplikasi saat video selesai.
     if (value.duration > Duration.zero &&
         value.position >= value.duration &&
         !value.isPlaying) {
@@ -126,12 +130,13 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
 
     _controller.removeListener(_checkVideoCompletion);
 
-    // Tahan frame terakhir video selama status akun diperiksa.
-    // Tidak menampilkan AppLoading atau halaman loading tambahan.
+    // Hentikan video sebelum memeriksa akun.
     try {
       await _controller.pause();
     } catch (error) {
-      debugPrint('[VideoIntro] Gagal menghentikan video: $error');
+      debugPrint(
+        '[VideoIntro] Gagal menghentikan video: $error',
+      );
     }
 
     if (!mounted || _navigated) return;
@@ -170,7 +175,9 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
         _navigateTo(const LoginPage());
       }
     } on TimeoutException catch (error) {
-      debugPrint('[VideoIntro] Pemeriksaan akun timeout: $error');
+      debugPrint(
+        '[VideoIntro] Pemeriksaan akun timeout: $error',
+      );
 
       if (!mounted || _navigated) return;
 
@@ -178,13 +185,15 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
         'Koneksi terlalu lama. Periksa internet lalu coba lagi.',
       );
     } catch (error, stackTrace) {
-      debugPrint('[VideoIntro] Gagal membuka aplikasi: $error');
+      debugPrint(
+        '[VideoIntro] Gagal membuka aplikasi: $error',
+      );
       debugPrintStack(stackTrace: stackTrace);
 
       if (!mounted || _navigated) return;
 
-      // Jika sesi tidak valid, arahkan pengguna ke login.
       final message = error.toString().toLowerCase();
+
       final invalidSession = message.contains('401') ||
           message.contains('unauthorized') ||
           message.contains('token') ||
@@ -269,6 +278,7 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // Video memenuhi seluruh layar.
             if (showVideo)
               SizedBox.expand(
                 child: FittedBox(
@@ -280,6 +290,8 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
                   ),
                 ),
               )
+
+            // Pesan jika video gagal diputar.
             else if (_initializationFailed)
               Center(
                 child: Padding(
@@ -320,33 +332,12 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
                   ),
                 ),
               )
+
+            // Loading hanya saat video pertama kali disiapkan.
             else
               const Center(
                 child: CircularProgressIndicator(
                   color: Colors.white,
-                ),
-              ),
-
-            if (!_openingApp && !_initializationFailed)
-              Positioned(
-                top: MediaQuery.of(context).padding.top + 12,
-                right: 16,
-                child: SafeArea(
-                  child: TextButton(
-                    onPressed: _openApp,
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.black45,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text(
-                      'Lewati',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ),
               ),
           ],
