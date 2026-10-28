@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -17,8 +15,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   String? _error;
 
   List<Map<String, dynamic>> _orders = [];
-
-  Map<String, dynamic> _currentUser = {};
 
   static const List<String> _months = [
     'Januari',
@@ -42,7 +38,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   // ============================================================
-  // LOAD DATA
+  // LOAD ORDERS
   // ============================================================
 
   Future<void> _load() async {
@@ -54,200 +50,24 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     });
 
     try {
-      final results = await Future.wait<dynamic>([
-        ApiService.getMyOrders(),
-        ApiService.getMe(),
-      ]);
+      final orders = await ApiService.getMyOrders();
 
       if (!mounted) return;
-
-      final orders =
-          (results[0] as List<Map<String, dynamic>>);
-
-      final user =
-          Map<String, dynamic>.from(results[1] as Map);
 
       setState(() {
         _orders = orders;
-        _currentUser = user;
+        _loading = false;
       });
-
-      // Lengkapi data yang belum disertakan endpoint daftar pesanan.
-      await _enrichOrders();
     } catch (e) {
       if (!mounted) return;
 
-      // Jika endpoint profil gagal, pesanan tetap dicoba dimuat.
-      try {
-        final orders = await ApiService.getMyOrders();
-
-        if (!mounted) return;
-
-        setState(() {
-          _orders = orders;
-          _currentUser = {};
-        });
-
-        await _enrichOrders();
-      } catch (orderError) {
-        if (!mounted) return;
-
-        setState(() {
-          _error = orderError
-              .toString()
-              .replaceFirst('Exception: ', '');
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
+      setState(() {
+        _error = e
+            .toString()
+            .replaceFirst('Exception: ', '');
+        _loading = false;
+      });
     }
-  }
-
-  Future<void> _enrichOrders() async {
-    if (_orders.isEmpty) return;
-
-    final updatedOrders = <Map<String, dynamic>>[];
-
-    for (final original in _orders) {
-      final order = Map<String, dynamic>.from(original);
-
-      try {
-        final eventId = _int(
-          _firstValue([
-            order['event_id'],
-            _map(order['event'])['id'],
-          ]),
-        );
-
-        final classId = _int(
-          _firstValue([
-            order['ticket_class_id'],
-            order['ticketClassId'],
-            _map(order['ticket_class'])['id'],
-            _map(order['ticketClass'])['id'],
-          ]),
-        );
-
-        final event = _map(order['event']);
-        final ticketClass = _map(
-          order['ticket_class'] ?? order['ticketClass'],
-        );
-
-        // Ambil detail event jika pesanan hanya berisi event_id.
-        if (eventId != null &&
-            eventId > 0 &&
-            !_hasEventDetails(event)) {
-          try {
-            final detail =
-                await ApiService.getEventById(eventId);
-
-            if (detail.isNotEmpty) {
-              order['event'] = {
-                ...event,
-                ...detail,
-              };
-            }
-          } catch (_) {
-            // Informasi yang sudah ada tetap dipertahankan.
-          }
-        }
-
-        // Ambil kelas tiket berdasarkan ID yang tersimpan di pesanan.
-        if (eventId != null &&
-            eventId > 0 &&
-            classId != null &&
-            classId > 0 &&
-            !_hasClassName(ticketClass)) {
-          try {
-            final detail =
-                await ApiService.getTicketClassById(
-              eventId: eventId,
-              ticketClassId: classId,
-            );
-
-            if (detail.isNotEmpty) {
-              order['ticket_class'] = {
-                ...ticketClass,
-                ...detail,
-              };
-            }
-          } catch (_) {
-            // Gunakan ticket_class_name dari pesanan jika tersedia.
-          }
-        }
-
-        // Ambil detail pembayaran jika belum tersedia.
-        final payment = _map(
-          order['payment'] ??
-              order['latest_payment'] ??
-              order['latestPayment'],
-        );
-
-        if (payment.isEmpty) {
-          try {
-            final payments = await ApiService.getMyPayments();
-
-            final orderId = _int(
-              _firstValue([order['id'], order['order_id']]),
-            );
-
-            if (orderId != null) {
-              final matchingPayments = payments.where((item) {
-                final paymentOrderId = _int(
-                  _firstValue([
-                    item['order_id'],
-                    _map(item['order'])['id'],
-                  ]),
-                );
-
-                return paymentOrderId == orderId;
-              }).toList();
-
-              if (matchingPayments.isNotEmpty) {
-                order['payment'] = matchingPayments.last;
-              }
-            }
-          } catch (_) {
-            // Status pembayaran dari pesanan tetap digunakan.
-          }
-        }
-      } catch (_) {
-        // Jangan menghilangkan pesanan akibat detail tambahan gagal.
-      }
-
-      updatedOrders.add(order);
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _orders = updatedOrders;
-    });
-  }
-
-  bool _hasEventDetails(Map<String, dynamic> event) {
-    return _firstValue([
-          event['title'],
-          event['name'],
-          event['event_date'],
-          event['date'],
-          event['start_date'],
-          event['location'],
-          event['venue'],
-        ]) !=
-        null;
-  }
-
-  bool _hasClassName(Map<String, dynamic> ticketClass) {
-    return _firstValue([
-          ticketClass['name'],
-          ticketClass['ticket_class_name'],
-        ]) !=
-        null;
   }
 
   // ============================================================
@@ -285,41 +105,23 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   String _text(
-    Map<String, dynamic> data,
-    List<String> keys, {
-    String fallback = '-',
-  }) {
-    for (final key in keys) {
-      final value = data[key];
-
-      if (value == null) continue;
-
-      if (value is Map || value is List) continue;
-
-      final text = value.toString().trim();
-
-      if (text.isNotEmpty && text.toLowerCase() != 'null') {
-        return text;
-      }
-    }
-
-    return fallback;
-  }
-
-  String _firstText(
     List<Map<String, dynamic>> sources,
     List<String> keys, {
     String fallback = '-',
   }) {
     for (final source in sources) {
-      final value = _text(
-        source,
-        keys,
-        fallback: '',
-      );
+      for (final key in keys) {
+        final value = source[key];
 
-      if (value.isNotEmpty) {
-        return value;
+        if (value == null || value is Map || value is List) {
+          continue;
+        }
+
+        final text = value.toString().trim();
+
+        if (text.isNotEmpty && text.toLowerCase() != 'null') {
+          return text;
+        }
       }
     }
 
@@ -337,6 +139,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
   double? _number(dynamic value) {
     if (value is num) return value.toDouble();
+
     if (value == null) return null;
 
     final text = value.toString().trim();
@@ -368,10 +171,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     return 'Rp ${rounded < 0 ? '-' : ''}$buffer';
   }
 
-  // ============================================================
-  // DATE AND TIME
-  // ============================================================
-
   DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
 
@@ -384,141 +183,36 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     return DateTime.tryParse(text);
   }
 
-  String _date(dynamic value) {
-    final parsed = _parseDate(value);
-
-    if (parsed == null) {
-      return value == null || value.toString().trim().isEmpty
-          ? '-'
-          : value.toString();
-    }
-
-    final date = parsed.toLocal();
-
-    return '${date.day} '
-        '${_months[date.month - 1]} '
-        '${date.year}';
-  }
-
   String _dateTime(dynamic value) {
     final parsed = _parseDate(value);
 
-    if (parsed == null) {
-      return value == null || value.toString().trim().isEmpty
-          ? '-'
-          : value.toString();
-    }
+    if (parsed == null) return '-';
 
     final date = parsed.toLocal();
 
     final hour = date.hour.toString().padLeft(2, '0');
     final minute = date.minute.toString().padLeft(2, '0');
 
-    return '${_date(date)} • $hour:$minute';
+    return '${date.day} ${_months[date.month - 1]} '
+        '${date.year} • $hour:$minute';
   }
 
-  String _time(dynamic value) {
-    if (value == null) return '-';
-
-    final raw = value.toString().trim();
-
-    if (raw.isEmpty || raw.toLowerCase() == 'null') {
-      return '-';
-    }
-
-    // Mendukung waktu berupa HH:mm atau HH:mm:ss.
-    final timeOnly = RegExp(
-      r'^(\d{1,2}):(\d{2})(?::\d{2})?$',
-    ).firstMatch(raw);
-
-    if (timeOnly != null) {
-      return '${timeOnly.group(1)!.padLeft(2, '0')}:'
-          '${timeOnly.group(2)}';
-    }
-
+  String _eventDate(dynamic value) {
     final parsed = _parseDate(value);
 
-    if (parsed == null) return raw;
+    if (parsed == null) return '-';
 
     final date = parsed.toLocal();
 
-    return '${date.hour.toString().padLeft(2, '0')}:'
-        '${date.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _eventDateTime(
-    Map<String, dynamic> event,
-    Map<String, dynamic> order,
-  ) {
-    final start = _firstValue([
-      event['start_datetime'],
-      event['start_at'],
-      event['starts_at'],
-      event['event_datetime'],
-      event['event_date'],
-      event['start_date'],
-      event['date'],
-      event['tanggal'],
-      order['event_datetime'],
-      order['event_date'],
-      order['start_date'],
-    ]);
-
-    if (start == null) return '-';
-
-    final startText = start.toString().trim();
-
-    // Field tanggal event terkadang hanya berisi tanggal.
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(startText)) {
-      final separateTime = _firstValue([
-        event['start_time'],
-        event['event_time'],
-        event['time'],
-        event['waktu'],
-        order['start_time'],
-        order['event_time'],
-      ]);
-
-      if (separateTime != null) {
-        return '${_date(start)} • ${_time(separateTime)}';
-      }
-    }
-
-    return _dateTime(start);
-  }
-
-  String _eventEndTime(Map<String, dynamic> event) {
-    final end = _firstValue([
-      event['end_datetime'],
-      event['end_at'],
-      event['ends_at'],
-      event['end_date'],
-      event['event_end'],
-      event['end_time'],
-      event['waktu_selesai'],
-    ]);
-
-    if (end == null) return '-';
-
-    final text = end.toString().trim();
-
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text)) {
-      return _date(end);
-    }
-
-    if (RegExp(r'^\d{1,2}:\d{2}').hasMatch(text)) {
-      return _time(end);
-    }
-
-    return _dateTime(end);
+    return '${date.day} ${_months[date.month - 1]} ${date.year}';
   }
 
   // ============================================================
-  // STATUS PEMESANAN DAN PEMBAYARAN
+  // STATUS
   // ============================================================
 
-  String _normalizeStatus(String value) {
-    return value.trim().toLowerCase().replaceAll('-', '_');
+  String _normalizeStatus(String status) {
+    return status.trim().toLowerCase().replaceAll('-', '_');
   }
 
   bool _isPaid(String status) {
@@ -582,9 +276,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       case 'refunded':
         return 'Dana dikembalikan';
 
-      case '':
-      case '-':
       case 'unknown':
+      case '':
         return 'Status tidak tersedia';
 
       default:
@@ -593,98 +286,53 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   Color _statusColor(String status) {
-    final normalized = _normalizeStatus(status);
-
-    if (_isPaid(normalized)) {
+    if (_isPaid(status)) {
       return AppColors.success;
     }
 
-    if (_isFailed(normalized)) {
+    if (_isFailed(status)) {
       return AppColors.error;
     }
 
     return AppColors.primary;
   }
 
-  String _effectivePaymentStatus(
+  String _paymentStatus(
     Map<String, dynamic> order,
     Map<String, dynamic> payment,
   ) {
-    final paymentStatus = _firstText(
+    final paymentStatus = _text(
       [payment],
-      [
-        'status',
-        'payment_status',
-        'paymentStatus',
-        'status_pembayaran',
-      ],
+      ['payment_status', 'paymentStatus', 'status'],
       fallback: '',
     );
 
-    final orderPaymentStatus = _firstText(
-      [order],
-      [
-        'payment_status',
-        'paymentStatus',
-        'status_pembayaran',
-      ],
-      fallback: '',
-    );
-
-    // Status pembayaran diprioritaskan dari data pembayaran.
     if (paymentStatus.isNotEmpty) {
       return paymentStatus;
     }
+
+    final orderPaymentStatus = _text(
+      [order],
+      ['payment_status', 'paymentStatus'],
+      fallback: '',
+    );
 
     if (orderPaymentStatus.isNotEmpty) {
       return orderPaymentStatus;
     }
 
-    final orderStatus = _firstText(
+    // Backend menandai order.status = "paid" saat pembayaran sukses.
+    final orderStatus = _text(
       [order],
-      ['order_status', 'status'],
-      fallback: '',
+      ['status', 'order_status'],
+      fallback: 'unknown',
     );
 
-    // Status order paid/confirmed dapat menjadi indikator pembayaran.
-    if (_isPaid(orderStatus)) return orderStatus;
+    if (_isPaid(orderStatus) || _isFailed(orderStatus)) {
+      return orderStatus;
+    }
 
-    if (_isFailed(orderStatus)) return orderStatus;
-
-    return 'unknown';
-  }
-
-  String _buyerName(
-    Map<String, dynamic> order,
-    Map<String, dynamic> user,
-  ) {
-    return _firstText(
-      [user, _currentUser, order],
-      [
-        'name',
-        'full_name',
-        'username',
-        'user_name',
-        'buyer_name',
-        'nama_pemesan',
-      ],
-      fallback: '-',
-    );
-  }
-
-  String _buyerEmail(
-    Map<String, dynamic> order,
-    Map<String, dynamic> user,
-  ) {
-    return _firstText(
-      [user, _currentUser, order],
-      [
-        'email',
-        'user_email',
-        'buyer_email',
-      ],
-      fallback: '-',
-    );
+    return orderStatus;
   }
 
   // ============================================================
@@ -755,8 +403,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     );
   }
 
-  Widget _statusChip(String label, String rawStatus) {
-    final color = _statusColor(rawStatus);
+  Widget _statusChip(String status) {
+    final color = _statusColor(status);
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -768,7 +416,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        label,
+        _statusLabel(status),
         style: TextStyle(
           color: color,
           fontSize: 12,
@@ -779,7 +427,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   // ============================================================
-  // TICKET CARD
+  // ORDER CARD
   // ============================================================
 
   Widget _ticketCard(Map<String, dynamic> order) {
@@ -789,20 +437,18 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       order['ticket_class'] ?? order['ticketClass'],
     );
 
-    final user = _map(order['user']);
-
     final payment = _map(
       order['payment'] ??
           order['latest_payment'] ??
           order['latestPayment'],
     );
 
-    final orderId = _firstText(
-      [order],
-      ['id', 'order_id'],
-    );
+    final orderId = _firstValue([
+      order['id'],
+      order['order_id'],
+    ]);
 
-    final eventName = _firstText(
+    final eventName = _text(
       [event, order],
       [
         'title',
@@ -814,11 +460,17 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       fallback: 'Event tidak diketahui',
     );
 
-    final eventDate = _eventDateTime(event, order);
+    final eventDateValue = _firstValue([
+      event['event_date'],
+      event['start_date'],
+      event['date'],
+      order['event_date'],
+      order['start_date'],
+    ]);
 
-    final eventEnd = _eventEndTime(event);
+    final eventDate = _eventDate(eventDateValue);
 
-    final eventLocation = _firstText(
+    final location = _text(
       [event, order],
       [
         'location',
@@ -829,19 +481,18 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       ],
     );
 
-    final ticketName = _firstText(
+    final ticketClassName = _text(
       [ticketClass, order],
       [
+        'name',
         'ticket_class_name',
         'class_name',
-        'ticket_name',
         'ticket_type',
-        'name',
       ],
-      fallback: 'Kelas tiket tidak tersedia',
+      fallback: 'Kelas tiket #${order['ticket_class_id'] ?? '-'}',
     );
 
-    final quantity = _number(
+    final quantity = _int(
           _firstValue([
             order['quantity'],
             order['ticket_quantity'],
@@ -849,42 +500,19 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
         ) ??
         0;
 
-    final orderStatus = _firstText(
-      [order],
-      ['order_status', 'status'],
-      fallback: 'unknown',
-    );
-
-    final paymentStatus = _effectivePaymentStatus(
-      order,
-      payment,
-    );
-
-    final totalValue = _firstValue([
+    final totalPrice = _firstValue([
       order['total_price'],
       order['total_amount'],
-      order['amount'],
       order['total'],
       payment['amount'],
     ]);
 
-    final unitPriceValue = _firstValue([
+    final unitPrice = _firstValue([
+      ticketClass['price'],
       order['ticket_price'],
       order['unit_price'],
-      ticketClass['price'],
       order['price'],
     ]);
-
-    final unitPrice = unitPriceValue ??
-        (() {
-          final total = _number(totalValue);
-
-          if (total != null && quantity > 0) {
-            return total / quantity;
-          }
-
-          return null;
-        })();
 
     final createdAt = _firstValue([
       order['created_at'],
@@ -892,229 +520,172 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       order['ordered_at'],
     ]);
 
-    final description = _firstText(
+    final orderStatus = _text(
+      [order],
+      ['status', 'order_status'],
+      fallback: 'unknown',
+    );
+
+    final paymentStatus = _paymentStatus(order, payment);
+
+    final paymentMethod = _text(
+      [payment, order],
+      ['payment_method', 'method'],
+      fallback: '',
+    );
+
+    final transactionId = _text(
+      [payment, order],
+      ['transaction_id'],
+      fallback: '',
+    );
+
+    final buyer = _map(order['user']);
+
+    final buyerName = _text(
+      [buyer],
+      ['name', 'full_name', 'username'],
+      fallback: '-',
+    );
+
+    final buyerEmail = _text(
+      [buyer],
+      ['email'],
+      fallback: '-',
+    );
+
+    final imageUrl = _text(
       [event, order],
-      [
-        'description',
-        'event_description',
-        'deskripsi',
-      ],
+      ['image_url', 'event_image', 'poster_url'],
       fallback: '',
     );
-
-    final buyerName = _buyerName(order, user);
-
-    final buyerEmail = _buyerEmail(order, user);
-
-    final imageUrl = _firstText(
-      [event, order],
-      [
-        'image_url',
-        'event_image',
-        'poster_url',
-      ],
-      fallback: '',
-    );
-
-    final paymentMethod = _firstText(
-      [payment, order],
-      [
-        'payment_method',
-        'method',
-      ],
-      fallback: '',
-    );
-
-    final paymentProvider = _firstText(
-      [payment, order],
-      [
-        'payment_provider',
-        'provider',
-      ],
-      fallback: '',
-    );
-
-    final transactionId = _firstText(
-      [payment, order],
-      [
-        'transaction_id',
-        'external_id',
-      ],
-      fallback: '',
-    );
-
-    final paidAt = _firstText(
-      [payment, order],
-      ['paid_at', 'settled_at'],
-      fallback: '',
-    );
-
-    final orderCreatedAt = createdAt == null
-        ? '-'
-        : _dateTime(createdAt);
 
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          dividerColor: Colors.transparent,
+      child: ExpansionTile(
+        key: PageStorageKey('order_$orderId'),
+        tilePadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
         ),
-        child: ExpansionTile(
-          key: PageStorageKey('order_$orderId'),
-          tilePadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 8,
+        childrenPadding: const EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          18,
+        ),
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(12),
           ),
-          childrenPadding: const EdgeInsets.fromLTRB(
-            16,
-            0,
-            16,
-            18,
+          child: const Icon(
+            Icons.confirmation_number_rounded,
+            color: AppColors.primary,
+            size: 27,
           ),
-          leading: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.10),
+        ),
+        title: Text(
+          eventName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.text,
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 7),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pesanan #$orderId',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 7),
+              _statusChip(paymentStatus),
+            ],
+          ),
+        ),
+        children: [
+          const Divider(height: 20),
+
+          if (imageUrl.startsWith('https://') ||
+              imageUrl.startsWith('http://'))
+            ClipRRect(
               borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                imageUrl,
+                width: double.infinity,
+                height: 170,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox.shrink();
+                },
+              ),
             ),
-            child: const Icon(
-              Icons.confirmation_number_rounded,
-              color: AppColors.primary,
-              size: 27,
-            ),
+
+          _sectionTitle(
+            'Informasi event',
+            Icons.event_rounded,
           ),
-          title: Text(
-            eventName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.text,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
+          _detailRow('Nama event', eventName),
+          _detailRow('Tanggal event', eventDate),
+          _detailRow('Lokasi', location),
+
+          _sectionTitle(
+            'Informasi tiket',
+            Icons.confirmation_number_outlined,
           ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 7),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pesanan #$orderId',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                _statusChip(
-                  _statusLabel(paymentStatus),
-                  paymentStatus,
-                ),
-              ],
-            ),
+          _detailRow('Nomor pesanan', '#$orderId'),
+          _detailRow('Kelas tiket', ticketClassName),
+          _detailRow('Jumlah tiket', '$quantity tiket'),
+          _detailRow('Harga satuan', _money(unitPrice)),
+          _detailRow(
+            'Total pembayaran',
+            _money(totalPrice),
+            bold: true,
           ),
-          children: [
-            const Divider(height: 20),
+          _detailRow(
+            'Waktu pemesanan',
+            createdAt == null ? '-' : _dateTime(createdAt),
+          ),
 
-            if (imageUrl.startsWith('https://') ||
-                imageUrl.startsWith('http://'))
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  imageUrl,
-                  width: double.infinity,
-                  height: 170,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) {
-                    return const SizedBox.shrink();
-                  },
-                ),
-              ),
+          _sectionTitle(
+            'Informasi pemesan',
+            Icons.person_outline_rounded,
+          ),
+          _detailRow('Nama pemesan', buyerName),
+          _detailRow('Email pemesan', buyerEmail),
 
-            _sectionTitle(
-              'Informasi event',
-              Icons.event_rounded,
-            ),
-            _detailRow('Nama event', eventName),
-            _detailRow('Tanggal dan waktu', eventDate),
-            _detailRow('Waktu selesai', eventEnd),
-            _detailRow('Lokasi', eventLocation),
+          _sectionTitle(
+            'Informasi pembayaran',
+            Icons.payment_rounded,
+          ),
+          _detailRow(
+            'Status pesanan',
+            _statusLabel(orderStatus),
+          ),
+          _detailRow(
+            'Status pembayaran',
+            _statusLabel(paymentStatus),
+            bold: true,
+          ),
 
-            if (description.isNotEmpty)
-              _detailRow('Deskripsi', description),
+          if (paymentMethod.isNotEmpty)
+            _detailRow('Metode pembayaran', paymentMethod),
 
-            _sectionTitle(
-              'Informasi tiket',
-              Icons.confirmation_number_outlined,
-            ),
-            _detailRow('Nomor pesanan', '#$orderId'),
-            _detailRow('Kelas tiket', ticketName),
-            _detailRow(
-              'Jumlah tiket',
-              '${quantity.toStringAsFixed(0)} tiket',
-            ),
-            _detailRow(
-              'Harga satuan',
-              _money(unitPrice),
-            ),
-            _detailRow(
-              'Total pembayaran',
-              _money(totalValue),
-              bold: true,
-            ),
-            _detailRow(
-              'Waktu pemesanan',
-              orderCreatedAt,
-            ),
-
-            _sectionTitle(
-              'Informasi pemesan',
-              Icons.person_outline_rounded,
-            ),
-            _detailRow('Nama pemesan', buyerName),
-            _detailRow('Email pemesan', buyerEmail),
-
-            _sectionTitle(
-              'Informasi pembayaran',
-              Icons.payment_rounded,
-            ),
-            _detailRow(
-              'Status pesanan',
-              _statusLabel(orderStatus),
-            ),
-            _detailRow(
-              'Status pembayaran',
-              _statusLabel(paymentStatus),
-              bold: true,
-            ),
-
-            if (paymentMethod.isNotEmpty)
-              _detailRow(
-                'Metode pembayaran',
-                paymentMethod,
-              ),
-
-            if (paymentProvider.isNotEmpty)
-              _detailRow(
-                'Penyedia pembayaran',
-                paymentProvider,
-              ),
-
-            if (transactionId.isNotEmpty)
-              _detailRow(
-                'ID transaksi',
-                transactionId,
-              ),
-
-            if (paidAt.isNotEmpty)
-              _detailRow(
-                'Waktu pembayaran',
-                _dateTime(paidAt),
-              ),
-          ],
-        ),
+          if (transactionId.isNotEmpty)
+            _detailRow('ID transaksi', transactionId),
+        ],
       ),
     );
   }
@@ -1179,9 +750,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                         const SizedBox(height: 16),
                         FilledButton.icon(
                           onPressed: _load,
-                          icon: const Icon(
-                            Icons.refresh_rounded,
-                          ),
+                          icon: const Icon(Icons.refresh_rounded),
                           label: const Text('Coba Lagi'),
                         ),
                       ],
@@ -1234,7 +803,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                             const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.all(20),
                         itemCount: _orders.length,
-                        separatorBuilder: (_, _) =>
+                        separatorBuilder: (context, index) =>
                             const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           return _ticketCard(_orders[index]);
