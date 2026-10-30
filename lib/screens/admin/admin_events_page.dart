@@ -57,11 +57,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
   }
 
   DateTime? _eventDate(Map<String, dynamic> event) {
-    final raw = _value(
-      event,
-      ['event_date', 'date', 'tanggal'],
-      fallback: '',
-    );
+    final raw = _value(event, ['event_date', 'date', 'tanggal'], fallback: '');
 
     if (raw.isEmpty) return null;
 
@@ -130,9 +126,8 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
         final ticket = Map<String, dynamic>.from(item);
 
-        final rawPrice = ticket['price'] ??
-            ticket['ticket_price'] ??
-            ticket['harga'];
+        final rawPrice =
+            ticket['price'] ?? ticket['ticket_price'] ?? ticket['harga'];
 
         if (rawPrice == null) continue;
 
@@ -217,11 +212,11 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
       return;
     }
 
-    final title = _value(
-      event,
-      ['title', 'name', 'nama_event'],
-      fallback: 'Event ini',
-    );
+    final title = _value(event, [
+      'title',
+      'name',
+      'nama_event',
+    ], fallback: 'Event ini');
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -229,8 +224,8 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
         title: const Text('Hapus event?'),
         content: Text(
           'Event "$title" akan dihapus. '
-          'Jika event sudah memiliki pesanan, gunakan pembatalan '
-          'event agar riwayat pesanan tetap tersimpan.',
+          'Jika event sudah memiliki pesanan, pastikan backend '
+          'mengizinkan penghapusan agar riwayat pesanan tidak rusak.',
         ),
         actions: [
           TextButton(
@@ -238,9 +233,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
             child: const Text('Batal'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Hapus'),
           ),
@@ -271,32 +264,27 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
     );
   }
 
   Widget _buildEventCard(Map<String, dynamic> event) {
     final id = _toInt(event['id'] ?? event['event_id']);
 
-    final title = _value(
-      event,
-      ['title', 'name', 'nama_event'],
-    );
+    final title = _value(event, ['title', 'name', 'nama_event']);
 
-    final location = _value(
-      event,
-      ['location', 'venue', 'lokasi'],
-      fallback: 'Lokasi belum tersedia',
-    );
+    final location = _value(event, [
+      'location',
+      'venue',
+      'lokasi',
+    ], fallback: 'Lokasi belum tersedia');
 
-    final image = _value(
-      event,
-      ['image_url', 'poster_url', 'image', 'gambar'],
-      fallback: '',
-    );
+    final image = _value(event, [
+      'image_url',
+      'poster_url',
+      'image',
+      'gambar',
+    ], fallback: '');
 
     final date = _eventDate(event);
     final priceRange = _priceRange(event);
@@ -333,7 +321,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                         : Image.network(
                             image,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
+                            errorBuilder: (_, _, _) {
                               return const ColoredBox(
                                 color: Color(0xFFEAE8FF),
                                 child: Icon(
@@ -398,10 +386,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                               children: [
                                 const Text(
                                   'Jangkauan Harga',
-                                  style: TextStyle(
-                                    color: muted,
-                                    fontSize: 11,
-                                  ),
+                                  style: TextStyle(color: muted, fontSize: 11),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
@@ -458,10 +443,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
       appBar: AppBar(
         title: const Text(
           'Kelola Event',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: dark,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, color: dark),
         ),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -473,9 +455,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
           ),
         ],
       ),
-      drawer: const AdminDrawerPage(
-        currentRoute: '/admin/events',
-      ),
+      drawer: const AdminDrawerPage(currentRoute: '/admin/events'),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
         backgroundColor: primary,
@@ -486,94 +466,79 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.cloud_off_outlined,
-                          size: 44,
-                          color: muted,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Event gagal dimuat',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: muted),
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Coba lagi'),
-                        ),
-                      ],
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.cloud_off_outlined,
+                      size: 44,
+                      color: muted,
                     ),
-                  ),
-                )
-              : _events.isEmpty
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(28),
-                      children: const [
-                        SizedBox(height: 90),
-                        Icon(
-                          Icons.event_busy_outlined,
-                          size: 64,
-                          color: muted,
-                        ),
-                        SizedBox(height: 16),
-                        Center(
-                          child: Text(
-                            'Belum ada event.',
-                            style: TextStyle(
-                              color: muted,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Center(
-                          child: Text(
-                            'Tekan Tambah Event untuk membuat event baru.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: muted),
-                          ),
-                        ),
-                      ],
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _load,
-                      child: ListView.separated(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(
-                          16,
-                          16,
-                          16,
-                          100,
-                        ),
-                        itemCount: _events.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final event = Map<String, dynamic>.from(
-                            _events[index],
-                          );
-
-                          return _buildEventCard(event);
-                        },
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Event gagal dimuat',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: muted),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Coba lagi'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : _events.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(28),
+              children: const [
+                SizedBox(height: 90),
+                Icon(Icons.event_busy_outlined, size: 64, color: muted),
+                SizedBox(height: 16),
+                Center(
+                  child: Text(
+                    'Belum ada event.',
+                    style: TextStyle(color: muted, fontSize: 16),
+                  ),
+                ),
+                SizedBox(height: 8),
+                Center(
+                  child: Text(
+                    'Tekan Tambah Event untuk membuat event baru.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: muted),
+                  ),
+                ),
+              ],
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                itemCount: _events.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final event = Map<String, dynamic>.from(_events[index]);
+
+                  return _buildEventCard(event);
+                },
+              ),
+            ),
     );
   }
 }
@@ -587,13 +552,10 @@ class _TicketClassInput {
   final TextEditingController priceController;
   final TextEditingController stockController;
 
-  _TicketClassInput({
-    String name = '',
-    String price = '0',
-    String stock = '0',
-  })  : nameController = TextEditingController(text: name),
-        priceController = TextEditingController(text: price),
-        stockController = TextEditingController(text: stock);
+  _TicketClassInput({String name = '', String price = '0', String stock = '0'})
+    : nameController = TextEditingController(text: name),
+      priceController = TextEditingController(text: price),
+      stockController = TextEditingController(text: stock);
 
   void dispose() {
     nameController.dispose();
@@ -609,9 +571,7 @@ class _TicketClassInput {
 class _EventFormDialog extends StatefulWidget {
   final Map<String, dynamic>? event;
 
-  const _EventFormDialog({
-    required this.event,
-  });
+  const _EventFormDialog({required this.event});
 
   @override
   State<_EventFormDialog> createState() => _EventFormDialogState();
@@ -627,7 +587,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
   late final TextEditingController _imageController;
-  late final TextEditingController _priceController;
   late final TextEditingController _stockController;
 
   final List<_TicketClassInput> _ticketClasses = [];
@@ -637,6 +596,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   TimeOfDay? _selectedTime;
 
   bool _saving = false;
+
+  // Membedakan poster lama yang dipertahankan dari poster yang dihapus.
+  bool _removeExistingImage = false;
 
   bool get _isEditing => widget.event != null;
 
@@ -659,26 +621,15 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     );
 
     _imageController = TextEditingController(
-      text: _read(
-        event,
-        ['image_url', 'poster_url', 'image', 'gambar'],
-      ),
-    );
-
-    _priceController = TextEditingController(
-      text: _read(
-        event,
-        ['price', 'ticket_price', 'harga'],
-        fallback: '0',
-      ),
+      text: _read(event, ['image_url', 'poster_url', 'image', 'gambar']),
     );
 
     _stockController = TextEditingController(
-      text: _read(
-        event,
-        ['available_tickets', 'stock', 'ticket_stock'],
-        fallback: '0',
-      ),
+      text: _read(event, [
+        'available_tickets',
+        'stock',
+        'ticket_stock',
+      ], fallback: '0'),
     );
 
     final rawDate = _read(event, ['event_date', 'date', 'tanggal']);
@@ -695,11 +646,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     } else {
       final now = DateTime.now();
 
-      _selectedDate = DateTime(
-        now.year,
-        now.month,
-        now.day + 1,
-      );
+      _selectedDate = DateTime(now.year, now.month, now.day + 1);
 
       _selectedTime = const TimeOfDay(hour: 19, minute: 0);
     }
@@ -734,9 +681,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   num _toNumFallback(Map<String, dynamic>? event) {
     if (event == null) return 0;
 
-    final value = event['price'] ??
-        event['ticket_price'] ??
-        event['harga'];
+    final value = event['price'] ?? event['ticket_price'] ?? event['harga'];
 
     if (value is num) return value;
 
@@ -762,9 +707,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     final prices = <num>[];
 
     for (final ticket in _ticketClasses) {
-      final price = num.tryParse(
-        ticket.priceController.text.trim(),
-      );
+      final price = num.tryParse(ticket.priceController.text.trim());
 
       if (price != null && price >= 0) {
         prices.add(price);
@@ -803,6 +746,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
       setState(() {
         _selectedImage = image;
+        _removeExistingImage = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -821,16 +765,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.image_outlined,
-              color: primary,
-              size: 42,
-            ),
+            Icon(Icons.image_outlined, color: primary, size: 42),
             SizedBox(height: 8),
-            Text(
-              'Belum ada poster',
-              style: TextStyle(color: Colors.black54),
-            ),
+            Text('Belum ada poster', style: TextStyle(color: Colors.black54)),
           ],
         ),
       ),
@@ -838,7 +775,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }
 
   Widget _buildPosterPicker() {
-    final existingUrl = _imageController.text.trim();
+    final existingUrl = _removeExistingImage
+        ? ''
+        : _imageController.text.trim();
 
     Widget preview;
 
@@ -848,7 +787,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         width: double.infinity,
         height: 190,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _posterPlaceholder(),
+        errorBuilder: (_, _, _) => _posterPlaceholder(),
       );
     } else if (existingUrl.isNotEmpty) {
       preview = Image.network(
@@ -856,11 +795,13 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         width: double.infinity,
         height: 190,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _posterPlaceholder(),
+        errorBuilder: (_, _, _) => _posterPlaceholder(),
       );
     } else {
       preview = _posterPlaceholder();
     }
+
+    final hasPoster = _selectedImage != null || existingUrl.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -869,10 +810,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         children: [
           const Text(
             'Poster Event (opsional)',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
           const SizedBox(height: 8),
           ClipRRect(
@@ -890,14 +828,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 child: OutlinedButton.icon(
                   onPressed: _saving ? null : _pickEventImage,
                   icon: const Icon(Icons.photo_library_outlined),
-                  label: Text(
-                    _selectedImage != null || existingUrl.isNotEmpty
-                        ? 'Ganti Poster'
-                        : 'Pilih dari Galeri',
-                  ),
+                  label: Text(hasPoster ? 'Ganti Poster' : 'Pilih dari Galeri'),
                 ),
               ),
-              if (_selectedImage != null || existingUrl.isNotEmpty) ...[
+              if (hasPoster) ...[
                 const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Hapus poster',
@@ -906,13 +840,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                       : () {
                           setState(() {
                             _selectedImage = null;
-                            _imageController.clear();
+                            _removeExistingImage = true;
                           });
                         },
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.red,
-                  ),
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
                 ),
               ],
             ],
@@ -920,11 +851,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
           const Text(
             'Pilih gambar dari galeri. Poster baru akan diunggah '
             'ketika kamu menyimpan event.',
-            style: TextStyle(
-              color: Colors.black54,
-              fontSize: 12,
-              height: 1.4,
-            ),
+            style: TextStyle(color: Colors.black54, fontSize: 12, height: 1.4),
           ),
         ],
       ),
@@ -942,11 +869,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }) {
     setState(() {
       _ticketClasses.add(
-        _TicketClassInput(
-          name: name,
-          price: price,
-          stock: stock,
-        ),
+        _TicketClassInput(name: name, price: price, stock: stock),
       );
     });
   }
@@ -969,7 +892,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     _descriptionController.dispose();
     _locationController.dispose();
     _imageController.dispose();
-    _priceController.dispose();
     _stockController.dispose();
 
     for (final ticket in _ticketClasses) {
@@ -1006,9 +928,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final initial = _selectedDate ?? today.add(
-      const Duration(days: 1),
-    );
+    final initial = _selectedDate ?? today.add(const Duration(days: 1));
 
     final picked = await showDatePicker(
       context: context,
@@ -1030,8 +950,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: _selectedTime ??
-          const TimeOfDay(hour: 19, minute: 0),
+      initialTime: _selectedTime ?? const TimeOfDay(hour: 19, minute: 0),
       helpText: 'Pilih waktu event',
       cancelText: 'Batal',
       confirmText: 'Pilih',
@@ -1067,6 +986,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       return '$label harus berupa angka.';
     }
 
+    if (!parsed.isFinite) {
+      return '$label tidak valid.';
+    }
+
     if (parsed < 0 || (!allowZero && parsed == 0)) {
       return allowZero
           ? '$label tidak boleh negatif.'
@@ -1096,8 +1019,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     final normalized = name.toLowerCase();
 
     final duplicates = _ticketClasses.where((ticket) {
-      return ticket.nameController.text.trim().toLowerCase() ==
-          normalized;
+      return ticket.nameController.text.trim().toLowerCase() == normalized;
     }).length;
 
     if (duplicates > 1) {
@@ -1112,7 +1034,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     final price = num.tryParse((value ?? '').trim());
 
-    if (price == null || price < 0) {
+    if (price == null || !price.isFinite || price < 0) {
       return 'Masukkan harga yang valid.';
     }
 
@@ -1157,8 +1079,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       _selectedTime!.minute,
     );
 
-    if (!_isEditing && !chosenDateTime.isAfter(now)) {
-      _message('Tanggal dan waktu event baru harus di masa depan.');
+    if (!chosenDateTime.isAfter(now)) {
+      _message('Tanggal dan waktu event harus di masa depan.');
       return;
     }
 
@@ -1184,16 +1106,14 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       for (final ticket in _ticketClasses) {
         final ticketName = ticket.nameController.text.trim();
 
-        final ticketPrice = num.tryParse(
-          ticket.priceController.text.trim(),
-        );
+        final ticketPrice = num.tryParse(ticket.priceController.text.trim());
 
-        final ticketStock = int.tryParse(
-          ticket.stockController.text.trim(),
-        );
+        final ticketStock = int.tryParse(ticket.stockController.text.trim());
 
         if (ticketName.isEmpty ||
+            ticketName.length > 30 ||
             ticketPrice == null ||
+            !ticketPrice.isFinite ||
             ticketPrice < 0 ||
             ticketStock == null ||
             ticketStock < 0) {
@@ -1204,16 +1124,22 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         ticketPrices.add(ticketPrice);
       }
 
+      final names = _ticketClasses
+          .map((ticket) => ticket.nameController.text.trim().toLowerCase())
+          .toList();
+
+      if (names.toSet().length != names.length) {
+        _message('Nama kelas tiket tidak boleh duplikat.');
+        return;
+      }
+
       ticketPrices.sort();
       price = ticketPrices.first;
     }
 
-    final eventId = widget.event?['id'] ??
-        widget.event?['event_id'];
+    final rawId = widget.event?['id'] ?? widget.event?['event_id'];
 
-    final id = eventId is int
-        ? eventId
-        : int.tryParse(eventId?.toString() ?? '');
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
 
     if (_isEditing && (id == null || id <= 0)) {
       _message('ID event tidak valid untuk proses edit.');
@@ -1225,12 +1151,14 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     });
 
     try {
-      // Pertahankan poster lama jika tidak memilih gambar baru.
-      String? imageUrl = _imageController.text.trim().isEmpty
+      // Poster lama dipertahankan jika tidak dihapus atau diganti.
+      String? imageUrl = _removeExistingImage
           ? null
-          : _imageController.text.trim();
+          : (_imageController.text.trim().isEmpty
+                ? null
+                : _imageController.text.trim());
 
-      // Jika memilih poster baru, unggah terlebih dahulu ke FastAPI.
+      // Upload gambar baru terlebih dahulu.
       if (_selectedImage != null) {
         imageUrl = await ApiService.uploadEventImage(
           File(_selectedImage!.path),
@@ -1252,40 +1180,26 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       } else {
         final createdEvent = await ApiService.createEvent(payload);
 
-        final rawId = createdEvent['id'] ??
-            createdEvent['event_id'];
+        final rawCreatedId = createdEvent['id'] ?? createdEvent['event_id'];
 
-        final createdEventId = rawId is int
-            ? rawId
-            : int.tryParse(rawId?.toString() ?? '');
+        final createdEventId = rawCreatedId is int
+            ? rawCreatedId
+            : int.tryParse(rawCreatedId?.toString() ?? '');
 
         if (createdEventId == null || createdEventId <= 0) {
           throw Exception(
-            'Event mungkin sudah tersimpan, tetapi ID event '
-            'tidak ditemukan pada respons server. '
-            'Periksa daftar event sebelum mencoba kembali.',
+            'Respons server tidak berisi ID event yang valid. '
+            'Periksa daftar event sebelum mencoba menyimpan ulang.',
           );
         }
 
-        // Simpan setiap kelas tiket setelah event berhasil dibuat.
+        // Buat setiap kelas tiket.
         for (final ticket in _ticketClasses) {
           final name = ticket.nameController.text.trim();
 
-          final ticketPrice = num.tryParse(
-            ticket.priceController.text.trim(),
-          );
+          final ticketPrice = num.parse(ticket.priceController.text.trim());
 
-          final ticketStock = int.tryParse(
-            ticket.stockController.text.trim(),
-          );
-
-          if (name.isEmpty ||
-              ticketPrice == null ||
-              ticketPrice < 0 ||
-              ticketStock == null ||
-              ticketStock < 0) {
-            throw Exception('Data kelas tiket "$name" tidak valid.');
-          }
+          final ticketStock = int.parse(ticket.stockController.text.trim());
 
           await ApiService.createTicketClass(
             eventId: createdEventId,
@@ -1319,10 +1233,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -1345,9 +1256,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 14,
             vertical: 14,
@@ -1365,9 +1274,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       decoration: BoxDecoration(
         color: const Color(0xFFF0EEFF),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFDCD7FF),
-        ),
+        border: Border.all(color: const Color(0xFFDCD7FF)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1402,10 +1309,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
           const Text(
             'Dihitung otomatis dari harga kelas tiket termurah '
             'hingga termahal.',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.black54),
           ),
         ],
       ),
@@ -1422,9 +1326,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       color: const Color(0xFFFAFAFF),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(
-          color: Color(0xFFEAEAF3),
-        ),
+        side: const BorderSide(color: Color(0xFFEAEAF3)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -1435,20 +1337,13 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 Expanded(
                   child: Text(
                     'Kelas Tiket ${index + 1}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
                   tooltip: 'Hapus kelas tiket',
-                  onPressed: _saving
-                      ? null
-                      : () => _removeTicketClass(index),
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.red,
-                  ),
+                  onPressed: _saving ? null : () => _removeTicketClass(index),
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
                 ),
               ],
             ),
@@ -1461,8 +1356,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 hintText: 'Standard, VIP, VVIP',
                 border: OutlineInputBorder(),
               ),
-              validator: (value) =>
-                  _ticketNameValidator(value, index),
+              validator: (value) => _ticketNameValidator(value, index),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -1508,9 +1402,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     return AlertDialog(
       title: Text(
         _isEditing ? 'Edit Event' : 'Tambah Event',
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-        ),
+        style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       content: SizedBox(
         width: 520,
@@ -1523,37 +1415,28 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 _field(
                   label: 'Nama event *',
                   controller: _titleController,
-                  validator: (v) =>
-                      _requiredValidator(v, 'Nama event'),
+                  validator: (value) => _requiredValidator(value, 'Nama event'),
                 ),
                 _field(
                   label: 'Deskripsi *',
                   controller: _descriptionController,
                   maxLines: 3,
-                  validator: (v) =>
-                      _requiredValidator(v, 'Deskripsi'),
+                  validator: (value) => _requiredValidator(value, 'Deskripsi'),
                 ),
                 _field(
                   label: 'Lokasi *',
                   controller: _locationController,
-                  validator: (v) =>
-                      _requiredValidator(v, 'Lokasi'),
+                  validator: (value) => _requiredValidator(value, 'Lokasi'),
                 ),
-
-                // Poster dipilih dari galeri, bukan dari input URL.
                 _buildPosterPicker(),
-
                 if (!_isEditing) ...[
                   _buildPriceRangeCard(),
                   _field(
                     label: 'Stok dasar *',
                     controller: _stockController,
                     keyboardType: TextInputType.number,
-                    validator: (v) => _numberValidator(
-                      v,
-                      label: 'Stok',
-                      allowZero: true,
-                    ),
+                    validator: (value) =>
+                        _numberValidator(value, label: 'Stok', allowZero: true),
                   ),
                   const SizedBox(height: 4),
                   const Align(
@@ -1572,10 +1455,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     child: Text(
                       'Tambahkan kelas tiket beserta harga dan stoknya. '
                       'Jangkauan harga akan berubah otomatis.',
-                      style: TextStyle(
-                        color: Colors.black54,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1586,9 +1466,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _saving
-                          ? null
-                          : () => _addTicketClass(),
+                      onPressed: _saving ? null : () => _addTicketClass(),
                       icon: const Icon(Icons.add),
                       label: const Text('Tambah Jenis Tiket'),
                     ),
@@ -1598,11 +1476,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     label: 'Stok dasar *',
                     controller: _stockController,
                     keyboardType: TextInputType.number,
-                    validator: (v) => _numberValidator(
-                      v,
-                      label: 'Stok',
-                      allowZero: true,
-                    ),
+                    validator: (value) =>
+                        _numberValidator(value, label: 'Stok', allowZero: true),
                   ),
                   const Align(
                     alignment: Alignment.centerLeft,
@@ -1623,9 +1498,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Tanggal event *',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1633,9 +1506,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _saving ? null : _pickDate,
-                    icon: const Icon(
-                      Icons.calendar_month_outlined,
-                    ),
+                    icon: const Icon(Icons.calendar_month_outlined),
                     label: Text(_dateLabel()),
                   ),
                 ),
@@ -1644,9 +1515,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Waktu event *',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1656,16 +1525,15 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     onPressed: _saving ? null : _pickTime,
                     icon: const Icon(Icons.access_time),
                     label: Text(
-                      _selectedTime?.format(context) ??
-                          'Pilih waktu',
+                      _selectedTime?.format(context) ?? 'Pilih waktu',
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 const Text(
                   'Jangkauan harga dihitung dari harga kelas tiket. '
-                  'Backend tetap menerima harga event berupa harga '
-                  'terendah agar kompatibel dengan API.',
+                  'Backend menerima harga event berupa harga terendah '
+                  'agar kompatibel dengan API.',
                   style: TextStyle(
                     color: Colors.black54,
                     fontSize: 12,
@@ -1679,9 +1547,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving
-              ? null
-              : () => Navigator.pop(context, false),
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
           child: const Text('Batal'),
         ),
         FilledButton.icon(
@@ -1690,14 +1556,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.save_outlined),
-          label: Text(
-            _saving ? 'Menyimpan...' : 'Simpan',
-          ),
+          label: Text(_saving ? 'Menyimpan...' : 'Simpan'),
         ),
       ],
     );
@@ -1712,29 +1574,19 @@ class _InfoLine extends StatelessWidget {
   final IconData icon;
   final String text;
 
-  const _InfoLine({
-    required this.icon,
-    required this.text,
-  });
+  const _InfoLine({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          icon,
-          size: 16,
-          color: const Color(0xFF77778A),
-        ),
+        Icon(icon, size: 16, color: const Color(0xFF77778A)),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              color: Color(0xFF77778A),
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Color(0xFF77778A), fontSize: 12),
           ),
         ),
       ],
