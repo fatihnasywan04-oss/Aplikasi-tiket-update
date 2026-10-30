@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
@@ -16,7 +18,8 @@ class ApiService {
 
   /// Batas waktu pembayaran simulasi.
   /// Waktu resmi tetap mengikuti expires_at dari backend.
-  static const Duration paymentExpiration = Duration(seconds: 60);
+  static const Duration paymentExpiration =
+      Duration(seconds: 60);
 
   static const String _tokenKey = 'access_token';
   static const String _userIdKey = 'user_id';
@@ -146,6 +149,12 @@ class ApiService {
         case 413:
           throw Exception(
             'Ukuran file terlalu besar. Pilih gambar yang lebih kecil.',
+          );
+
+        case 415:
+          throw Exception(
+            'Format file ditolak server. Pastikan file merupakan '
+            'gambar yang valid dan endpoint upload menerima JPEG.',
           );
 
         case 422:
@@ -547,36 +556,62 @@ class ApiService {
 
   /// Upload poster dengan multipart/form-data.
   ///
-  /// Backend yang diasumsikan:
+  /// Endpoint:
   /// POST /events/upload-image
-  /// Field upload: file
   ///
-  /// Respons contoh:
-  /// {"image_url": "/uploads/events/poster.jpg"}
+  /// Field:
+  /// file
+  ///
+  /// Gambar yang didukung oleh package:image akan dikonversi
+  /// ke JPEG agar sesuai dengan backend yang menerima JPEG.
   static Future<String> uploadEventImage(File imageFile) async {
     if (!await imageFile.exists()) {
       throw Exception('File poster tidak ditemukan.');
     }
 
-    final fileLength = await imageFile.length();
-
-    if (fileLength <= 0) {
-      throw Exception('File poster kosong.');
-    }
-
-    const maxImageSize = 5 * 1024 * 1024;
-
-    if (fileLength > maxImageSize) {
-      throw Exception('Ukuran poster maksimal 5 MB.');
-    }
-
-    final headers = await _adminHeaders();
-
-    // MultipartRequest menentukan Content-Type beserta boundary.
-    headers.remove('Content-Type');
-    headers['Accept'] = 'application/json';
-
     try {
+      final originalBytes = await imageFile.readAsBytes();
+
+      if (originalBytes.isEmpty) {
+        throw Exception('File poster kosong.');
+      }
+
+      const maxImageSize = 15 * 1024 * 1024;
+
+      if (originalBytes.length > maxImageSize) {
+        throw Exception(
+          'Ukuran poster maksimal 15 MB. '
+          'Pilih gambar yang lebih kecil.',
+        );
+      }
+
+      // Deteksi dan dekode berdasarkan isi file.
+      final decodedImage = img.decodeImage(originalBytes);
+
+      if (decodedImage == null) {
+        throw Exception(
+          'File tidak dapat dibaca sebagai gambar. '
+          'Format ini mungkin belum didukung.',
+        );
+      }
+
+      // Konversi gambar ke JPEG.
+      final jpegBytes = img.encodeJpg(
+        decodedImage,
+        quality: 90,
+      );
+
+      if (jpegBytes.isEmpty) {
+        throw Exception('Gambar gagal dikonversi ke JPEG.');
+      }
+
+      final headers = await _adminHeaders();
+
+      // Jangan mengirim Content-Type JSON pada multipart request.
+      headers.remove('Content-Type');
+      headers.remove('content-type');
+      headers['Accept'] = 'application/json';
+
       final request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/events/upload-image'),
@@ -585,12 +620,11 @@ class ApiService {
       request.headers.addAll(headers);
 
       request.files.add(
-        await http.MultipartFile.fromPath(
+        http.MultipartFile.fromBytes(
           'file',
-          imageFile.path,
-          filename: imageFile.uri.pathSegments.isNotEmpty
-              ? imageFile.uri.pathSegments.last
-              : 'event_poster.jpg',
+          jpegBytes,
+          filename: 'event_poster.jpg',
+          contentType: MediaType('image', 'jpeg'),
         ),
       );
 
@@ -619,7 +653,7 @@ class ApiService {
         throw Exception('Format URL poster tidak valid.');
       }
 
-      // URL lengkap.
+      // URL absolut.
       if (imageUri.hasScheme) {
         if (!{'http', 'https'}.contains(imageUri.scheme) ||
             imageUri.host.isEmpty) {
@@ -629,7 +663,7 @@ class ApiService {
         return imageUri.toString();
       }
 
-      // URL protokol-relatif, misalnya //cdn.example.com/image.jpg.
+      // URL protokol-relatif.
       if (rawImageUrl.startsWith('//')) {
         return 'https:$rawImageUrl';
       }
@@ -638,7 +672,8 @@ class ApiService {
       return Uri.parse(baseUrl).resolve(rawImageUrl).toString();
     } on TimeoutException {
       throw Exception(
-        'Upload poster melewati batas waktu. Periksa koneksi internet.',
+        'Upload poster melewati batas waktu. '
+        'Periksa koneksi internet.',
       );
     } on SocketException {
       throw Exception(
@@ -764,8 +799,6 @@ class ApiService {
     }
   }
 
-  /// Endpoint yang diasumsikan:
-  /// GET /events/{event_id}/ticket-classes/
   static Future<List<Map<String, dynamic>>> getTicketClasses(
     int eventId,
   ) async {
@@ -1068,7 +1101,8 @@ class ApiService {
     );
   }
 
-  /// Endpoint simulasi: POST /payments/{payment_id}/confirm.
+  /// Endpoint simulasi:
+  /// POST /payments/{payment_id}/confirm.
   static Future<Map<String, dynamic>> confirmPayment({
     required int paymentId,
   }) async {
