@@ -14,7 +14,7 @@ class ApiService {
 
   static const Duration _timeout = Duration(seconds: 20);
 
-  /// Batas pembayaran simulasi.
+  /// Batas waktu pembayaran simulasi.
   /// Waktu resmi tetap mengikuti expires_at dari backend.
   static const Duration paymentExpiration = Duration(seconds: 60);
 
@@ -72,8 +72,11 @@ class ApiService {
       if (detail is List) {
         return detail.map((item) {
           if (item is Map) {
-            return (item['msg'] ?? item['message'] ?? item)
-                .toString();
+            return (
+              item['msg'] ??
+              item['message'] ??
+              item
+            ).toString();
           }
 
           return item.toString();
@@ -189,7 +192,7 @@ class ApiService {
       );
     } on SocketException {
       throw Exception(
-        'Tidak dapat terhubung ke server. Periksa koneksi.',
+        'Tidak dapat terhubung ke server. Periksa koneksi internet.',
       );
     } on http.ClientException catch (error) {
       if (kDebugMode) {
@@ -204,10 +207,12 @@ class ApiService {
         'Data dari server tidak dapat dibaca.',
       );
     } catch (error) {
-      if (error is Exception) rethrow;
+      if (error is Exception) {
+        rethrow;
+      }
 
       if (kDebugMode) {
-        debugPrint('ApiService error: $error');
+        debugPrint('ApiService unexpected error: $error');
       }
 
       throw Exception(
@@ -305,7 +310,7 @@ class ApiService {
     return _map(current);
   }
 
-  /// Mendukung respons list langsung atau dalam wrapper API.
+  /// Mendukung list langsung atau list di dalam wrapper API.
   static List<Map<String, dynamic>> _list(dynamic value) {
     dynamic current = value;
 
@@ -421,6 +426,7 @@ class ApiService {
 
   static Future<bool> isLoggedIn() async {
     final token = await getToken();
+
     return token != null && token.trim().isNotEmpty;
   }
 
@@ -536,41 +542,37 @@ class ApiService {
   }
 
   // ============================================================
-  // EVENTS
+  // EVENTS DAN UPLOAD POSTER
   // ============================================================
 
-  /// Upload poster event menggunakan multipart/form-data.
+  /// Upload poster dengan multipart/form-data.
   ///
-  /// Endpoint backend:
+  /// Backend yang diasumsikan:
   /// POST /events/upload-image
+  /// Field upload: file
   ///
-  /// Field file pada request:
-  /// file
-  ///
-  /// Respons backend harus mengandung image_url.
-  ///
-  /// Contoh:
-  /// {"image_url": "/uploads/events/abc.jpg"}
+  /// Respons contoh:
+  /// {"image_url": "/uploads/events/poster.jpg"}
   static Future<String> uploadEventImage(File imageFile) async {
+    if (!await imageFile.exists()) {
+      throw Exception('File poster tidak ditemukan.');
+    }
+
     final fileLength = await imageFile.length();
 
     if (fileLength <= 0) {
       throw Exception('File poster kosong.');
     }
 
-    // Batas lokal untuk mencegah upload file terlalu besar.
-    // Backend tetap wajib melakukan validasi sendiri.
     const maxImageSize = 5 * 1024 * 1024;
 
     if (fileLength > maxImageSize) {
-      throw Exception(
-        'Ukuran poster maksimal 5 MB.',
-      );
+      throw Exception('Ukuran poster maksimal 5 MB.');
     }
 
     final headers = await _adminHeaders();
 
-    // Jangan mengirim Content-Type application/json untuk multipart.
+    // MultipartRequest menentukan Content-Type beserta boundary.
     headers.remove('Content-Type');
     headers['Accept'] = 'application/json';
 
@@ -592,11 +594,13 @@ class ApiService {
         ),
       );
 
-      final streamedResponse = await request.send().timeout(_timeout);
+      final streamedResponse = await request.send().timeout(
+        _timeout,
+      );
 
       final response = await http.Response.fromStream(
         streamedResponse,
-      );
+      ).timeout(_timeout);
 
       final result = _decodeResponse(response);
       final data = _unwrapMap(result);
@@ -605,30 +609,36 @@ class ApiService {
 
       if (rawImageUrl == null || rawImageUrl.isEmpty) {
         throw Exception(
-          'Server tidak mengembalikan URL poster.',
+          'URL poster tidak ditemukan dalam respons server.',
         );
-      }
-
-      // Jika backend mengembalikan URL relatif.
-      if (rawImageUrl.startsWith('/')) {
-        return '$baseUrl$rawImageUrl';
       }
 
       final imageUri = Uri.tryParse(rawImageUrl);
 
-      if (imageUri == null ||
-          !imageUri.hasScheme ||
-          !{'http', 'https'}.contains(imageUri.scheme) ||
-          imageUri.host.isEmpty) {
-        throw Exception(
-          'URL poster yang diterima dari server tidak valid.',
-        );
+      if (imageUri == null) {
+        throw Exception('Format URL poster tidak valid.');
       }
 
-      return rawImageUrl;
+      // URL lengkap.
+      if (imageUri.hasScheme) {
+        if (!{'http', 'https'}.contains(imageUri.scheme) ||
+            imageUri.host.isEmpty) {
+          throw Exception('URL poster dari server tidak valid.');
+        }
+
+        return imageUri.toString();
+      }
+
+      // URL protokol-relatif, misalnya //cdn.example.com/image.jpg.
+      if (rawImageUrl.startsWith('//')) {
+        return 'https:$rawImageUrl';
+      }
+
+      // URL relatif, misalnya /uploads/events/poster.jpg.
+      return Uri.parse(baseUrl).resolve(rawImageUrl).toString();
     } on TimeoutException {
       throw Exception(
-        'Upload poster terlalu lama. Periksa koneksi internet.',
+        'Upload poster melewati batas waktu. Periksa koneksi internet.',
       );
     } on SocketException {
       throw Exception(
@@ -641,6 +651,10 @@ class ApiService {
 
       throw Exception(
         'Terjadi masalah jaringan saat mengunggah poster.',
+      );
+    } on FileSystemException {
+      throw Exception(
+        'File poster tidak dapat dibaca. Pilih gambar lain.',
       );
     }
   }
@@ -750,7 +764,8 @@ class ApiService {
     }
   }
 
-  /// Endpoint FastAPI: GET /events/{event_id}/ticket-classes/
+  /// Endpoint yang diasumsikan:
+  /// GET /events/{event_id}/ticket-classes/
   static Future<List<Map<String, dynamic>>> getTicketClasses(
     int eventId,
   ) async {
@@ -792,9 +807,7 @@ class ApiService {
     }
 
     if (normalizedName.length > 30) {
-      throw Exception(
-        'Nama kelas tiket maksimal 30 karakter.',
-      );
+      throw Exception('Nama kelas tiket maksimal 30 karakter.');
     }
 
     if (price < 0) {
@@ -853,9 +866,7 @@ class ApiService {
       }
 
       if (normalizedName.length > 30) {
-        throw Exception(
-          'Nama kelas tiket maksimal 30 karakter.',
-        );
+        throw Exception('Nama kelas tiket maksimal 30 karakter.');
       }
 
       body['name'] = normalizedName;
@@ -925,15 +936,11 @@ class ApiService {
     required int quantity,
   }) async {
     if (eventId <= 0 || ticketClassId <= 0) {
-      throw Exception(
-        'Event atau kelas tiket tidak valid.',
-      );
+      throw Exception('Event atau kelas tiket tidak valid.');
     }
 
     if (quantity <= 0) {
-      throw Exception(
-        'Jumlah tiket harus lebih dari nol.',
-      );
+      throw Exception('Jumlah tiket harus lebih dari nol.');
     }
 
     return _unwrapMap(
@@ -1033,8 +1040,7 @@ class ApiService {
       throw Exception('ID pesanan tidak valid.');
     }
 
-    final normalizedMethod =
-        paymentMethod.trim().toLowerCase();
+    final normalizedMethod = paymentMethod.trim().toLowerCase();
 
     if (!methods.contains(normalizedMethod)) {
       throw Exception(
@@ -1046,9 +1052,7 @@ class ApiService {
     final provider = paymentProvider.trim();
 
     if (provider.isEmpty) {
-      throw Exception(
-        'Silakan pilih penyedia pembayaran.',
-      );
+      throw Exception('Silakan pilih penyedia pembayaran.');
     }
 
     return _unwrapMap(
