@@ -140,6 +140,11 @@ class ApiService {
             'Konflik data atau stok tiket berubah. $message',
           );
 
+        case 413:
+          throw Exception(
+            'Ukuran file terlalu besar. Pilih gambar yang lebih kecil.',
+          );
+
         case 422:
           throw Exception(
             'Data yang dikirim tidak valid. $message',
@@ -393,7 +398,10 @@ class ApiService {
 
     await prefs.setInt(_userIdKey, userId);
     await prefs.setString(_usernameKey, username);
-    await prefs.setString(_roleKey, role.trim().toLowerCase());
+    await prefs.setString(
+      _roleKey,
+      role.trim().toLowerCase(),
+    );
   }
 
   static Future<int?> getUserId() async {
@@ -530,6 +538,112 @@ class ApiService {
   // ============================================================
   // EVENTS
   // ============================================================
+
+  /// Upload poster event menggunakan multipart/form-data.
+  ///
+  /// Endpoint backend:
+  /// POST /events/upload-image
+  ///
+  /// Field file pada request:
+  /// file
+  ///
+  /// Respons backend harus mengandung image_url.
+  ///
+  /// Contoh:
+  /// {"image_url": "/uploads/events/abc.jpg"}
+  static Future<String> uploadEventImage(File imageFile) async {
+    final fileLength = await imageFile.length();
+
+    if (fileLength <= 0) {
+      throw Exception('File poster kosong.');
+    }
+
+    // Batas lokal untuk mencegah upload file terlalu besar.
+    // Backend tetap wajib melakukan validasi sendiri.
+    const maxImageSize = 5 * 1024 * 1024;
+
+    if (fileLength > maxImageSize) {
+      throw Exception(
+        'Ukuran poster maksimal 5 MB.',
+      );
+    }
+
+    final headers = await _adminHeaders();
+
+    // Jangan mengirim Content-Type application/json untuk multipart.
+    headers.remove('Content-Type');
+    headers['Accept'] = 'application/json';
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/events/upload-image'),
+      );
+
+      request.headers.addAll(headers);
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          imageFile.path,
+          filename: imageFile.uri.pathSegments.isNotEmpty
+              ? imageFile.uri.pathSegments.last
+              : 'event_poster.jpg',
+        ),
+      );
+
+      final streamedResponse = await request.send().timeout(_timeout);
+
+      final response = await http.Response.fromStream(
+        streamedResponse,
+      );
+
+      final result = _decodeResponse(response);
+      final data = _unwrapMap(result);
+
+      final rawImageUrl = data['image_url']?.toString().trim();
+
+      if (rawImageUrl == null || rawImageUrl.isEmpty) {
+        throw Exception(
+          'Server tidak mengembalikan URL poster.',
+        );
+      }
+
+      // Jika backend mengembalikan URL relatif.
+      if (rawImageUrl.startsWith('/')) {
+        return '$baseUrl$rawImageUrl';
+      }
+
+      final imageUri = Uri.tryParse(rawImageUrl);
+
+      if (imageUri == null ||
+          !imageUri.hasScheme ||
+          !{'http', 'https'}.contains(imageUri.scheme) ||
+          imageUri.host.isEmpty) {
+        throw Exception(
+          'URL poster yang diterima dari server tidak valid.',
+        );
+      }
+
+      return rawImageUrl;
+    } on TimeoutException {
+      throw Exception(
+        'Upload poster terlalu lama. Periksa koneksi internet.',
+      );
+    } on SocketException {
+      throw Exception(
+        'Tidak dapat terhubung ke server saat mengunggah poster.',
+      );
+    } on http.ClientException catch (error) {
+      if (kDebugMode) {
+        debugPrint('ApiService upload error: $error');
+      }
+
+      throw Exception(
+        'Terjadi masalah jaringan saat mengunggah poster.',
+      );
+    }
+  }
 
   static Future<List<Map<String, dynamic>>> getEvents() async {
     return _list(await _get('/events/'));
@@ -951,8 +1065,6 @@ class ApiService {
   }
 
   /// Endpoint simulasi: POST /payments/{payment_id}/confirm.
-  /// Backend mengembalikan payment_status dan order_status
-  /// di level teratas, bukan di dalam objek payment.
   static Future<Map<String, dynamic>> confirmPayment({
     required int paymentId,
   }) async {

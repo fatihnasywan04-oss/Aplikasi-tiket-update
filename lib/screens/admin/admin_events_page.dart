@@ -1,5 +1,7 @@
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../api_service.dart';
 import 'admin_drawer_page.dart';
@@ -45,10 +47,12 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
   }) {
     for (final key in keys) {
       final value = event[key];
+
       if (value != null && value.toString().trim().isNotEmpty) {
         return value.toString();
       }
     }
+
     return fallback;
   }
 
@@ -60,6 +64,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     );
 
     if (raw.isEmpty) return null;
+
     return DateTime.tryParse(raw);
   }
 
@@ -94,6 +99,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
       if (i > 0 && (digits.length - i) % 3 == 0) {
         buffer.write('.');
       }
+
       buffer.write(digits[i]);
     }
 
@@ -123,6 +129,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
         if (item is! Map) continue;
 
         final ticket = Map<String, dynamic>.from(item);
+
         final rawPrice = ticket['price'] ??
             ticket['ticket_price'] ??
             ticket['harga'];
@@ -273,7 +280,11 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
   Widget _buildEventCard(Map<String, dynamic> event) {
     final id = _toInt(event['id'] ?? event['event_id']);
-    final title = _value(event, ['title', 'name', 'nama_event']);
+
+    final title = _value(
+      event,
+      ['title', 'name', 'nama_event'],
+    );
 
     final location = _value(
       event,
@@ -322,7 +333,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                         : Image.network(
                             image,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
+                            errorBuilder: (_, __, ___) {
                               return const ColoredBox(
                                 color: Color(0xFFEAE8FF),
                                 child: Icon(
@@ -552,12 +563,13 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                           100,
                         ),
                         itemCount: _events.length,
-                        separatorBuilder: (context, index) =>
+                        separatorBuilder: (_, __) =>
                             const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final event = Map<String, dynamic>.from(
                             _events[index],
                           );
+
                           return _buildEventCard(event);
                         },
                       ),
@@ -568,7 +580,6 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
 // ============================================================
 // MODEL INPUT KELAS TIKET
-// Deklarasikan class ini hanya satu kali.
 // ============================================================
 
 class _TicketClassInput {
@@ -610,6 +621,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   static const Color primary = Color(0xFF5B50E8);
 
   final _formKey = GlobalKey<FormState>();
+  final ImagePicker _imagePicker = ImagePicker();
 
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
@@ -620,8 +632,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
   final List<_TicketClassInput> _ticketClasses = [];
 
+  XFile? _selectedImage;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+
   bool _saving = false;
 
   bool get _isEditing => widget.event != null;
@@ -645,10 +659,12 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     );
 
     _imageController = TextEditingController(
-      text: _read(event, ['image_url', 'poster_url', 'image', 'gambar']),
+      text: _read(
+        event,
+        ['image_url', 'poster_url', 'image', 'gambar'],
+      ),
     );
 
-    // Dipertahankan untuk kompatibilitas backend saat edit.
     _priceController = TextEditingController(
       text: _read(
         event,
@@ -674,10 +690,17 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         parsedDate.month,
         parsedDate.day,
       );
+
       _selectedTime = TimeOfDay.fromDateTime(parsedDate);
     } else {
       final now = DateTime.now();
-      _selectedDate = DateTime(now.year, now.month, now.day + 1);
+
+      _selectedDate = DateTime(
+        now.year,
+        now.month,
+        now.day + 1,
+      );
+
       _selectedTime = const TimeOfDay(hour: 19, minute: 0);
     }
 
@@ -699,10 +722,12 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }) {
     for (final key in keys) {
       final value = data[key];
+
       if (value != null && value.toString().trim().isNotEmpty) {
         return value.toString();
       }
     }
+
     return fallback;
   }
 
@@ -726,18 +751,20 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       if (i > 0 && (digits.length - i) % 3 == 0) {
         buffer.write('.');
       }
+
       buffer.write(digits[i]);
     }
 
     return 'Rp $buffer';
   }
 
-  
   String _ticketPriceRange() {
     final prices = <num>[];
 
     for (final ticket in _ticketClasses) {
-      final price = num.tryParse(ticket.priceController.text.trim());
+      final price = num.tryParse(
+        ticket.priceController.text.trim(),
+      );
 
       if (price != null && price >= 0) {
         prices.add(price);
@@ -758,6 +785,155 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         '${_formatRupiah(prices.last)}';
   }
 
+  // ==========================================================
+  // PILIH POSTER DARI GALERI
+  // ==========================================================
+
+  Future<void> _pickEventImage() async {
+    if (_saving) return;
+
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+
+      if (image == null || !mounted) return;
+
+      setState(() {
+        _selectedImage = image;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      _message(
+        'Gagal memilih poster: '
+        '${e.toString().replaceFirst('Exception: ', '')}',
+      );
+    }
+  }
+
+  Widget _posterPlaceholder() {
+    return const ColoredBox(
+      color: Color(0xFFEAE8FF),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.image_outlined,
+              color: primary,
+              size: 42,
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Belum ada poster',
+              style: TextStyle(color: Colors.black54),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPosterPicker() {
+    final existingUrl = _imageController.text.trim();
+
+    Widget preview;
+
+    if (_selectedImage != null) {
+      preview = Image.file(
+        File(_selectedImage!.path),
+        width: double.infinity,
+        height: 190,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _posterPlaceholder(),
+      );
+    } else if (existingUrl.isNotEmpty) {
+      preview = Image.network(
+        existingUrl,
+        width: double.infinity,
+        height: 190,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _posterPlaceholder(),
+      );
+    } else {
+      preview = _posterPlaceholder();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Poster Event (opsional)',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 190,
+              child: preview,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickEventImage,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: Text(
+                    _selectedImage != null || existingUrl.isNotEmpty
+                        ? 'Ganti Poster'
+                        : 'Pilih dari Galeri',
+                  ),
+                ),
+              ),
+              if (_selectedImage != null || existingUrl.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Hapus poster',
+                  onPressed: _saving
+                      ? null
+                      : () {
+                          setState(() {
+                            _selectedImage = null;
+                            _imageController.clear();
+                          });
+                        },
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const Text(
+            'Pilih gambar dari galeri. Poster baru akan diunggah '
+            'ketika kamu menyimpan event.',
+            style: TextStyle(
+              color: Colors.black54,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================
+  // KELAS TIKET
+  // ==========================================================
 
   void _addTicketClass({
     String name = '',
@@ -805,6 +981,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
   String _dateLabel() {
     final date = _selectedDate;
+
     if (date == null) return 'Pilih tanggal event';
 
     const months = [
@@ -828,7 +1005,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final initial = _selectedDate ?? today.add(const Duration(days: 1));
+
+    final initial = _selectedDate ?? today.add(
+      const Duration(days: 1),
+    );
 
     final picked = await showDatePicker(
       context: context,
@@ -842,13 +1022,16 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     if (picked == null || !mounted) return;
 
-    setState(() => _selectedDate = picked);
+    setState(() {
+      _selectedDate = picked;
+    });
   }
 
   Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: _selectedTime ?? const TimeOfDay(hour: 19, minute: 0),
+      initialTime: _selectedTime ??
+          const TimeOfDay(hour: 19, minute: 0),
       helpText: 'Pilih waktu event',
       cancelText: 'Batal',
       confirmText: 'Pilih',
@@ -856,13 +1039,20 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     if (picked == null || !mounted) return;
 
-    setState(() => _selectedTime = picked);
+    setState(() {
+      _selectedTime = picked;
+    });
   }
+
+  // ==========================================================
+  // VALIDASI FORM
+  // ==========================================================
 
   String? _requiredValidator(String? value, String label) {
     if (value == null || value.trim().isEmpty) {
       return '$label wajib diisi.';
     }
+
     return null;
   }
 
@@ -873,7 +1063,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }) {
     final parsed = num.tryParse((value ?? '').trim());
 
-    if (parsed == null) return '$label harus berupa angka.';
+    if (parsed == null) {
+      return '$label harus berupa angka.';
+    }
 
     if (parsed < 0 || (!allowZero && parsed == 0)) {
       return allowZero
@@ -904,7 +1096,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     final normalized = name.toLowerCase();
 
     final duplicates = _ticketClasses.where((ticket) {
-      return ticket.nameController.text.trim().toLowerCase() == normalized;
+      return ticket.nameController.text.trim().toLowerCase() ==
+          normalized;
     }).length;
 
     if (duplicates > 1) {
@@ -937,6 +1130,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     return null;
   }
+
+  // ==========================================================
+  // SIMPAN EVENT DAN UPLOAD POSTER
+  // ==========================================================
 
   Future<void> _save() async {
     if (_saving) return;
@@ -986,9 +1183,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
       for (final ticket in _ticketClasses) {
         final ticketName = ticket.nameController.text.trim();
+
         final ticketPrice = num.tryParse(
           ticket.priceController.text.trim(),
         );
+
         final ticketStock = int.tryParse(
           ticket.stockController.text.trim(),
         );
@@ -1009,7 +1208,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       price = ticketPrices.first;
     }
 
-    final eventId = widget.event?['id'] ?? widget.event?['event_id'];
+    final eventId = widget.event?['id'] ??
+        widget.event?['event_id'];
 
     final id = eventId is int
         ? eventId
@@ -1020,27 +1220,40 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       return;
     }
 
-    final payload = <String, dynamic>{
-      'title': _titleController.text.trim(),
-      'description': _descriptionController.text.trim(),
-      'location': _locationController.text.trim(),
-      'image_url': _imageController.text.trim().isEmpty
-          ? null
-          : _imageController.text.trim(),
-      'event_date': chosenDateTime.toIso8601String(),
-      'price': price,
-      'available_tickets': stock,
-    };
-
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+    });
 
     try {
+      // Pertahankan poster lama jika tidak memilih gambar baru.
+      String? imageUrl = _imageController.text.trim().isEmpty
+          ? null
+          : _imageController.text.trim();
+
+      // Jika memilih poster baru, unggah terlebih dahulu ke FastAPI.
+      if (_selectedImage != null) {
+        imageUrl = await ApiService.uploadEventImage(
+          File(_selectedImage!.path),
+        );
+      }
+
+      final payload = <String, dynamic>{
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'location': _locationController.text.trim(),
+        'image_url': imageUrl,
+        'event_date': chosenDateTime.toIso8601String(),
+        'price': price,
+        'available_tickets': stock,
+      };
+
       if (_isEditing) {
         await ApiService.updateEvent(id!, payload);
       } else {
         final createdEvent = await ApiService.createEvent(payload);
 
-        final rawId = createdEvent['id'] ?? createdEvent['event_id'];
+        final rawId = createdEvent['id'] ??
+            createdEvent['event_id'];
 
         final createdEventId = rawId is int
             ? rawId
@@ -1054,11 +1267,14 @@ class _EventFormDialogState extends State<_EventFormDialog> {
           );
         }
 
+        // Simpan setiap kelas tiket setelah event berhasil dibuat.
         for (final ticket in _ticketClasses) {
           final name = ticket.nameController.text.trim();
+
           final ticketPrice = num.tryParse(
             ticket.priceController.text.trim(),
           );
+
           final ticketStock = int.tryParse(
             ticket.stockController.text.trim(),
           );
@@ -1092,7 +1308,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       );
     } finally {
       if (mounted) {
-        setState(() => _saving = false);
+        setState(() {
+          _saving = false;
+        });
       }
     }
   }
@@ -1147,7 +1365,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       decoration: BoxDecoration(
         color: const Color(0xFFF0EEFF),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFDCD7FF)),
+        border: Border.all(
+          color: const Color(0xFFDCD7FF),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1202,7 +1422,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       color: const Color(0xFFFAFAFF),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFEAEAF3)),
+        side: const BorderSide(
+          color: Color(0xFFEAEAF3),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -1213,7 +1435,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 Expanded(
                   child: Text(
                     'Kelas Tiket ${index + 1}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1237,7 +1461,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 hintText: 'Standard, VIP, VVIP',
                 border: OutlineInputBorder(),
               ),
-              validator: (value) => _ticketNameValidator(value, index),
+              validator: (value) =>
+                  _ticketNameValidator(value, index),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -1274,12 +1499,18 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     );
   }
 
+  // ==========================================================
+  // TAMPILAN FORM
+  // ==========================================================
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(
         _isEditing ? 'Edit Event' : 'Tambah Event',
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+        ),
       ),
       content: SizedBox(
         width: 520,
@@ -1292,41 +1523,26 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 _field(
                   label: 'Nama event *',
                   controller: _titleController,
-                  validator: (v) => _requiredValidator(v, 'Nama event'),
+                  validator: (v) =>
+                      _requiredValidator(v, 'Nama event'),
                 ),
                 _field(
                   label: 'Deskripsi *',
                   controller: _descriptionController,
                   maxLines: 3,
-                  validator: (v) => _requiredValidator(v, 'Deskripsi'),
+                  validator: (v) =>
+                      _requiredValidator(v, 'Deskripsi'),
                 ),
                 _field(
                   label: 'Lokasi *',
                   controller: _locationController,
-                  validator: (v) => _requiredValidator(v, 'Lokasi'),
+                  validator: (v) =>
+                      _requiredValidator(v, 'Lokasi'),
                 ),
-                _field(
-                  label: 'URL gambar (opsional)',
-                  controller: _imageController,
-                  keyboardType: TextInputType.url,
-                  hint: 'https://contoh.com/poster.jpg',
-                  validator: (value) {
-                    final text = (value ?? '').trim();
 
-                    if (text.isEmpty) return null;
+                // Poster dipilih dari galeri, bukan dari input URL.
+                _buildPosterPicker(),
 
-                    final uri = Uri.tryParse(text);
-
-                    if (uri == null ||
-                        !uri.hasScheme ||
-                        !(uri.scheme == 'https' || uri.scheme == 'http') ||
-                        uri.host.isEmpty) {
-                      return 'Masukkan URL gambar yang valid.';
-                    }
-
-                    return null;
-                  },
-                ),
                 if (!_isEditing) ...[
                   _buildPriceRangeCard(),
                   _field(
@@ -1370,7 +1586,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _saving ? null : () => _addTicketClass(),
+                      onPressed: _saving
+                          ? null
+                          : () => _addTicketClass(),
                       icon: const Icon(Icons.add),
                       label: const Text('Tambah Jenis Tiket'),
                     ),
@@ -1405,7 +1623,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Tanggal event *',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1413,7 +1633,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _saving ? null : _pickDate,
-                    icon: const Icon(Icons.calendar_month_outlined),
+                    icon: const Icon(
+                      Icons.calendar_month_outlined,
+                    ),
                     label: Text(_dateLabel()),
                   ),
                 ),
@@ -1422,7 +1644,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Waktu event *',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1432,7 +1656,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     onPressed: _saving ? null : _pickTime,
                     icon: const Icon(Icons.access_time),
                     label: Text(
-                      _selectedTime?.format(context) ?? 'Pilih waktu',
+                      _selectedTime?.format(context) ??
+                          'Pilih waktu',
                     ),
                   ),
                 ),
@@ -1454,7 +1679,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          onPressed: _saving
+              ? null
+              : () => Navigator.pop(context, false),
           child: const Text('Batal'),
         ),
         FilledButton.icon(
@@ -1463,15 +1690,23 @@ class _EventFormDialogState extends State<_EventFormDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
                 )
               : const Icon(Icons.save_outlined),
-          label: Text(_saving ? 'Menyimpan...' : 'Simpan'),
+          label: Text(
+            _saving ? 'Menyimpan...' : 'Simpan',
+          ),
         ),
       ],
     );
   }
 }
+
+// ============================================================
+// WIDGET BARIS INFORMASI EVENT
+// ============================================================
 
 class _InfoLine extends StatelessWidget {
   final IconData icon;
