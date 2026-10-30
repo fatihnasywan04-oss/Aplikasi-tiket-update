@@ -12,7 +12,6 @@ import 'screens/admin/admin_orders_page.dart';
 import 'screens/admin/admin_payments_page.dart';
 import 'screens/user/user_shell.dart';
 import 'widgets/app_error_view.dart';
-import 'widgets/app_loading.dart';
 import 'video_intro_page.dart';
 
 const Color appPrimaryColor = Color(0xFF5B50E8);
@@ -23,8 +22,7 @@ const Color appBackgroundColor = Color(0xFFF7F7FC);
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Aktifkan fullscreen imersif.
-  // Menyembunyikan status bar dan navigation bar Android.
+  // Fullscreen imersif.
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.immersiveSticky,
   );
@@ -90,21 +88,18 @@ class EventTicketersApp extends StatelessWidget {
             horizontal: 16,
             vertical: 15,
           ),
-
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(
               color: Color(0xFFE0E0ED),
             ),
           ),
-
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(
               color: Color(0xFFE0E0ED),
             ),
           ),
-
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(
@@ -145,7 +140,7 @@ class EventTicketersApp extends StatelessWidget {
         '/admin/payments': (_) => const AdminPaymentsPage(),
       },
 
-      // Video intro tampil pertama kali.
+      // Video MP4 menjadi halaman pertama.
       home: const VideoIntroPage(),
     );
   }
@@ -167,22 +162,7 @@ class _AppEntryState extends State<AppEntry> {
     _page = _resolvePage();
   }
 
-  Future<void> _ensureMinimumLoadingDuration(
-    DateTime startTime,
-  ) async {
-    const minimumDuration = Duration(seconds: 1);
-
-    final elapsed = DateTime.now().difference(startTime);
-    final remaining = minimumDuration - elapsed;
-
-    if (remaining > Duration.zero) {
-      await Future<void>.delayed(remaining);
-    }
-  }
-
   Future<Widget> _resolvePage() async {
-    final startTime = DateTime.now();
-
     debugPrint('[AppEntry] Memeriksa status login...');
 
     try {
@@ -193,10 +173,6 @@ class _AppEntryState extends State<AppEntry> {
       debugPrint('[AppEntry] Status login: $loggedIn');
 
       if (!loggedIn) {
-        await _ensureMinimumLoadingDuration(startTime);
-
-        debugPrint('[AppEntry] Membuka LoginPage.');
-
         return const LoginPage();
       }
 
@@ -214,19 +190,15 @@ class _AppEntryState extends State<AppEntry> {
 
       debugPrint('[AppEntry] Role pengguna: $role');
 
-      await _ensureMinimumLoadingDuration(startTime);
-
       if (role == 'admin') {
         debugPrint(
           '[AppEntry] Membuka AdminDashboardPage.',
         );
-
         return const AdminDashboardPage();
       }
 
       if (role == 'user') {
         debugPrint('[AppEntry] Membuka UserShell.');
-
         return const UserShell();
       }
 
@@ -274,8 +246,6 @@ class _AppEntryState extends State<AppEntry> {
           );
         }
 
-        await _ensureMinimumLoadingDuration(startTime);
-
         return const LoginPage();
       }
 
@@ -301,8 +271,10 @@ class _AppEntryState extends State<AppEntry> {
       future: _page,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const AppLoading(
-            message: 'Menyiapkan aplikasi...',
+          // Tidak menampilkan AppLoading atau loading tambahan.
+          // Biarkan halaman tetap kosong selama proses pemeriksaan.
+          return const Scaffold(
+            backgroundColor: appBackgroundColor,
           );
         }
 
