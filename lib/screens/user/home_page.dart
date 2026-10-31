@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -43,7 +42,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
-      // getEvents() mengembalikan List<Map<String, dynamic>>.
       final result = await ApiService.getEvents();
 
       if (!mounted) return;
@@ -75,6 +73,40 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _openEvent(Map<String, dynamic> event) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailPage(event: event),
+      ),
+    );
+  }
+
+  Widget _buildEventList() {
+    return SizedBox(
+      height: 440,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: _events.length,
+        separatorBuilder: (context, index) =>
+            const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          final event = _events[index];
+
+          return SizedBox(
+            width: 260,
+            child: EventCard(
+              event: event,
+              onTap: () => _openEvent(event),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,6 +117,7 @@ class _HomePageState extends State<HomePage> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            // HEADER
             SliverToBoxAdapter(
               child: Container(
                 padding: EdgeInsets.fromLTRB(
@@ -165,7 +198,9 @@ class _HomePageState extends State<HomePage> {
                           style: TextStyle(color: Colors.white),
                         ),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white70),
+                          side: const BorderSide(
+                            color: Colors.white70,
+                          ),
                         ),
                       ),
                     ),
@@ -173,8 +208,10 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
+
+            // JUDUL EVENT PILIHAN
             const SliverPadding(
-              padding: EdgeInsets.fromLTRB(20, 24, 20, 12),
+              padding: EdgeInsets.fromLTRB(20, 24, 20, 14),
               sliver: SliverToBoxAdapter(
                 child: Text(
                   'Event pilihan',
@@ -186,6 +223,8 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
+
+            // LOADING
             if (_loading)
               const SliverToBoxAdapter(
                 child: Padding(
@@ -197,6 +236,8 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               )
+
+            // ERROR
             else if (_error != null)
               SliverToBoxAdapter(
                 child: Padding(
@@ -228,6 +269,8 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               )
+
+            // EVENT KOSONG
             else if (_events.isEmpty)
               const SliverToBoxAdapter(
                 child: Padding(
@@ -235,42 +278,20 @@ class _HomePageState extends State<HomePage> {
                   child: Center(
                     child: Text(
                       'Belum ada event tersedia.',
-                      style: TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ),
               )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                sliver: SliverGrid(
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 0.61,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final event = _events[index];
 
-                      return EventCard(
-                        event: event,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EventDetailPage(event: event),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    childCount: _events.length,
-                  ),
-                ),
+            // EVENT HORIZONTAL
+            else
+              SliverToBoxAdapter(
+                child: _buildEventList(),
               ),
+
             const SliverToBoxAdapter(
               child: SizedBox(height: 28),
             ),

@@ -1,4 +1,3 @@
-
 import 'dart:typed_data';
 
 import 'package:pdf/widgets.dart' as pw;
@@ -9,6 +8,7 @@ class TicketPdfService {
   static Future<void> shareTicket({
     required String eventName,
     required String customerName,
+    required String customerEmail,
     required String ticketName,
     required String ticketCode,
     required String eventDate,
@@ -33,6 +33,7 @@ class TicketPdfService {
                   ),
                 ),
                 pw.SizedBox(height: 20),
+
                 pw.Text(
                   eventName,
                   style: pw.TextStyle(
@@ -41,11 +42,19 @@ class TicketPdfService {
                   ),
                 ),
                 pw.SizedBox(height: 20),
-                pw.Text('Nama: $customerName'),
-                pw.Text('Kategori Tiket: $ticketName'),
+
+                pw.Text('Nama pemesan: $customerName'),
+                pw.SizedBox(height: 6),
+                pw.Text('Email pemesan: $customerEmail'),
+                pw.SizedBox(height: 6),
+                pw.Text('Kategori tiket: $ticketName'),
+                pw.SizedBox(height: 6),
                 pw.Text('Tanggal: $eventDate'),
+                pw.SizedBox(height: 6),
                 pw.Text('Lokasi: $eventLocation'),
+
                 pw.SizedBox(height: 25),
+
                 pw.Center(
                   child: pw.BarcodeWidget(
                     barcode: pw.Barcode.qrCode(),
@@ -54,7 +63,9 @@ class TicketPdfService {
                     height: 150,
                   ),
                 ),
+
                 pw.SizedBox(height: 10),
+
                 pw.Center(
                   child: pw.Text(
                     ticketCode,
@@ -63,7 +74,9 @@ class TicketPdfService {
                     ),
                   ),
                 ),
+
                 pw.SizedBox(height: 25),
+
                 pw.Text(
                   'Tunjukkan QR Code ini kepada petugas '
                   'untuk validasi tiket.',
