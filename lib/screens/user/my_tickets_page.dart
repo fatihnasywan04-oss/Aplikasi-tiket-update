@@ -1,9 +1,11 @@
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_colors.dart';
+import '../../core/services/ticket_pdf_service.dart';
 
 class MyTicketsPage extends StatefulWidget {
   const MyTicketsPage({super.key});
@@ -124,10 +126,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
         ]),
       );
 
-      // --------------------------------------------------------
       // EVENT
-      // --------------------------------------------------------
-
       if (eventId != null && eventId > 0) {
         final needsEvent = existingEvent.isEmpty ||
             _isEmptyValue(existingEvent['title']) ||
@@ -147,30 +146,21 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               _eventCache[eventId] = fetchedEvent;
             }
 
-            // Data event dari order tetap dipertahankan sebagai fallback.
             order['event'] = {
               ...fetchedEvent,
               ...existingEvent,
             };
           } catch (_) {
-            // Data pesanan tetap dapat ditampilkan jika event gagal dimuat.
+            // Pertahankan data pesanan jika event gagal dimuat.
           }
         }
       }
 
-      // --------------------------------------------------------
       // KELAS TIKET
-      //
-      // Jangan hanya mengambil kelas tiket ketika nama kosong.
-      // Data kelas tiket harus dicocokkan berdasarkan ID.
-      // --------------------------------------------------------
-
       if (eventId == null ||
           eventId <= 0 ||
           ticketClassId == null ||
           ticketClassId <= 0) {
-        // Jangan membuat nama VIP/Standard berdasarkan tebakan.
-        // Nama kelas akan menggunakan data yang memang tersedia.
         continue;
       }
 
@@ -179,10 +169,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       Map<String, dynamic>? matchedClass;
 
       try {
-        // 1. Periksa cache berdasarkan event dan ID kelas.
         matchedClass = _ticketClassCache[cacheKey];
 
-        // 2. Jika belum ada, ambil daftar kelas tiket event.
         if (matchedClass == null) {
           var ticketClasses = _ticketClassesCache[eventId];
 
@@ -193,7 +181,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
             _ticketClassesCache[eventId] = ticketClasses;
           }
 
-          // Cocokkan ID kelas tiket secara eksplisit.
           for (final item in ticketClasses) {
             final itemId = _int(
               _firstValue([
@@ -210,7 +197,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           }
         }
 
-        // 3. Jika tidak ditemukan dari daftar, coba endpoint detail.
         if (matchedClass == null) {
           try {
             final fetchedClass = await ApiService.getTicketClassById(
@@ -226,33 +212,25 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               ]),
             );
 
-            // Jangan memakai hasil detail jika ID-nya berbeda.
             if (fetchedId == ticketClassId) {
               matchedClass = fetchedClass;
             }
           } catch (_) {
-            // Tetap gunakan data kelas dari order sebagai fallback.
+            // Gunakan data kelas dari order sebagai fallback.
           }
         }
 
         if (matchedClass != null) {
           _ticketClassCache[cacheKey] = matchedClass;
 
-          // Data API yang cocok dengan ID menjadi sumber utama.
-          // Data dari order hanya menjadi fallback.
           order['ticket_class'] = {
             ...existingClass,
             ...matchedClass,
           };
-        } else {
-          // Pertahankan objek kelas yang sudah disediakan backend.
-          // Jangan mengganti nama yang valid dengan "Kelas tiket #ID".
-          if (existingClass.isNotEmpty) {
-            order['ticket_class'] = existingClass;
-          }
+        } else if (existingClass.isNotEmpty) {
+          order['ticket_class'] = existingClass;
         }
       } catch (_) {
-        // Gagal memperkaya kelas tiket tidak boleh menghapus order.
         if (existingClass.isNotEmpty) {
           order['ticket_class'] = existingClass;
         }
@@ -656,6 +634,50 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   // ============================================================
+  // BAGIKAN TIKET PDF
+  // ============================================================
+
+  Future<void> _shareTicket({
+    required String eventName,
+    required String eventDate,
+    required String location,
+    required String ticketClassName,
+    required String buyerName,
+    required int orderId,
+    required String paymentStatus,
+  }) async {
+    if (!_isPaid(paymentStatus)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tiket hanya bisa dibagikan setelah pembayaran berhasil.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await TicketPdfService.shareTicket(
+        eventName: eventName,
+        customerName: buyerName,
+        ticketName: ticketClassName,
+        ticketCode: 'ORDER-$orderId',
+        eventDate: eventDate,
+        eventLocation: location,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal membuat tiket PDF: $e'),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
   // UI HELPERS
   // ============================================================
 
@@ -897,8 +919,6 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       ],
     );
 
-    // Ambil nama dari objek kelas tiket yang sudah dicocokkan.
-    // Jika objek belum memiliki nama, gunakan ID sebagai fallback.
     final ticketClassName = _text(
       [ticketClass],
       [
@@ -1109,7 +1129,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           if (transactionId.isNotEmpty)
             _detailRow('ID transaksi', transactionId),
 
-          if (orderId != null)
+          if (orderId != null) ...[
             _paymentAction(
               order: order,
               orderId: orderId,
@@ -1117,6 +1137,33 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               orderStatus: orderStatus,
               expiration: expiration,
             ),
+
+            if (_isPaid(paymentStatus))
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => _shareTicket(
+                      eventName: eventName,
+                      eventDate: eventDate,
+                      location: location,
+                      ticketClassName: ticketClassName,
+                      buyerName: buyerName,
+                      orderId: orderId,
+                      paymentStatus: paymentStatus,
+                    ),
+                    icon: const Icon(Icons.share_rounded),
+                    label: const Text('Bagikan Tiket'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );
