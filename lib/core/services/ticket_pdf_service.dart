@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 class TicketPdfService {
@@ -32,6 +32,11 @@ class TicketPdfService {
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
+
+                pw.SizedBox(height: 20),
+
+                pw.Divider(),
+
                 pw.SizedBox(height: 20),
 
                 pw.Text(
@@ -41,16 +46,21 @@ class TicketPdfService {
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
+
                 pw.SizedBox(height: 20),
 
                 pw.Text('Nama pemesan: $customerName'),
                 pw.SizedBox(height: 6),
+
                 pw.Text('Email pemesan: $customerEmail'),
                 pw.SizedBox(height: 6),
+
                 pw.Text('Kategori tiket: $ticketName'),
                 pw.SizedBox(height: 6),
+
                 pw.Text('Tanggal: $eventDate'),
                 pw.SizedBox(height: 6),
+
                 pw.Text('Lokasi: $eventLocation'),
 
                 pw.SizedBox(height: 25),
@@ -70,6 +80,7 @@ class TicketPdfService {
                   child: pw.Text(
                     ticketCode,
                     style: pw.TextStyle(
+                      fontSize: 14,
                       fontWeight: pw.FontWeight.bold,
                     ),
                   ),
@@ -77,9 +88,25 @@ class TicketPdfService {
 
                 pw.SizedBox(height: 25),
 
+                pw.Divider(),
+
+                pw.SizedBox(height: 10),
+
                 pw.Text(
                   'Tunjukkan QR Code ini kepada petugas '
                   'untuk validasi tiket.',
+                  style: const pw.TextStyle(
+                    fontSize: 12,
+                  ),
+                ),
+
+                pw.SizedBox(height: 10),
+
+                pw.Text(
+                  'Simpan tiket ini sebagai bukti pemesanan.',
+                  style: const pw.TextStyle(
+                    fontSize: 10,
+                  ),
                 ),
               ],
             ),

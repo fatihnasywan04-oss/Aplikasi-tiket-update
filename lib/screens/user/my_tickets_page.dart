@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -175,9 +174,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           var ticketClasses = _ticketClassesCache[eventId];
 
           if (ticketClasses == null) {
-            ticketClasses =
-                await ApiService.getTicketClasses(eventId);
-
+            ticketClasses = await ApiService.getTicketClasses(eventId);
             _ticketClassesCache[eventId] = ticketClasses;
           }
 
@@ -643,10 +640,13 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     required String location,
     required String ticketClassName,
     required String buyerName,
+    required String buyerEmail,
     required int orderId,
     required String paymentStatus,
   }) async {
     if (!_isPaid(paymentStatus)) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -661,6 +661,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       await TicketPdfService.shareTicket(
         eventName: eventName,
         customerName: buyerName,
+        customerEmail: buyerEmail,
         ticketName: ticketClassName,
         ticketCode: 'ORDER-$orderId',
         eventDate: eventDate,
@@ -1150,6 +1151,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                       location: location,
                       ticketClassName: ticketClassName,
                       buyerName: buyerName,
+                      buyerEmail: buyerEmail,
                       orderId: orderId,
                       paymentStatus: paymentStatus,
                     ),

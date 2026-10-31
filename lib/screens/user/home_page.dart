@@ -34,12 +34,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadEvents() async {
-    if (mounted) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
+    if (!mounted) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     try {
       final result = await ApiService.getEvents();
@@ -57,7 +57,9 @@ class _HomePageState extends State<HomePage> {
       });
     } finally {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+        });
       }
     }
   }
@@ -90,8 +92,9 @@ class _HomePageState extends State<HomePage> {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: _events.length,
-        separatorBuilder: (context, index) =>
-            const SizedBox(width: 14),
+        separatorBuilder: (context, index) {
+          return const SizedBox(width: 14);
+        },
         itemBuilder: (context, index) {
           final event = _events[index];
 
@@ -103,6 +106,183 @@ class _HomePageState extends State<HomePage> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildLoading() {
+    return const SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.all(40),
+        child: Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 42,
+              color: AppColors.primaryLight,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Event belum bisa dimuat.',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _error ?? 'Terjadi kesalahan.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _loadEvents,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Coba lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return const SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(
+                Icons.event_busy_rounded,
+                size: 42,
+                color: AppColors.primaryLight,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Belum ada event tersedia.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        MediaQuery.of(context).padding.top + 16,
+        20,
+        24,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary,
+            AppColors.primaryLight,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(28),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.confirmation_number_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
+              SizedBox(width: 10),
+              Text(
+                'Event Ticketers',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 21,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Temukan pengalaman seru berikutnya!',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              height: 1.25,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Cari event, pesan tiket, dan siapkan pengalaman terbaikmu.',
+            style: TextStyle(
+              color: Colors.white,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 20),
+          AppSearchBar(
+            controller: _search,
+            hintText: 'Cari event favoritmu...',
+            onChanged: (_) {},
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openExplore,
+              icon: const Icon(
+                Icons.search_rounded,
+                color: Colors.white,
+              ),
+              label: const Text(
+                'Cari event',
+                style: TextStyle(
+                  color: Colors.white,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(
+                  color: Colors.white70,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -119,94 +299,7 @@ class _HomePageState extends State<HomePage> {
           slivers: [
             // HEADER
             SliverToBoxAdapter(
-              child: Container(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  MediaQuery.of(context).padding.top + 16,
-                  20,
-                  24,
-                ),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primaryLight,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(28),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(
-                          Icons.confirmation_number_rounded,
-                          color: Colors.white,
-                          size: 30,
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          'Event Ticketers',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 21,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Temukan pengalaman seru berikutnya!',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        height: 1.25,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Cari event, pesan tiket, dan siapkan pengalaman terbaikmu.',
-                      style: TextStyle(
-                        color: Colors.white,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    AppSearchBar(
-                      controller: _search,
-                      hintText: 'Cari event favoritmu...',
-                      onChanged: (_) {},
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _openExplore,
-                        icon: const Icon(
-                          Icons.search_rounded,
-                          color: Colors.white,
-                        ),
-                        label: const Text(
-                          'Cari event',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              child: _buildHeader(context),
             ),
 
             // JUDUL EVENT PILIHAN
@@ -224,74 +317,19 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // LOADING
+            // LOADING, ERROR, KOSONG, ATAU DAFTAR EVENT
             if (_loading)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-              )
-
-            // ERROR
+              _buildLoading()
             else if (_error != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.cloud_off_rounded,
-                        size: 42,
-                        color: AppColors.primaryLight,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text('Event belum bisa dimuat.'),
-                      const SizedBox(height: 8),
-                      Text(
-                        _error!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextButton.icon(
-                        onPressed: _loadEvents,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Coba lagi'),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-
-            // EVENT KOSONG
+              _buildError()
             else if (_events.isEmpty)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(
-                    child: Text(
-                      'Belum ada event tersedia.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ),
-              )
-
-            // EVENT HORIZONTAL
+              _buildEmpty()
             else
               SliverToBoxAdapter(
                 child: _buildEventList(),
               ),
 
+            // SPACING BAWAH
             const SliverToBoxAdapter(
               child: SizedBox(height: 28),
             ),
