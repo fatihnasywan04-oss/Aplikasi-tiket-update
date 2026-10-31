@@ -86,7 +86,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildEventList() {
     return SizedBox(
-      height: 440,
+      height: 360,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -99,7 +99,7 @@ class _HomePageState extends State<HomePage> {
           final event = _events[index];
 
           return SizedBox(
-            width: 260,
+            width: 240,
             child: EventCard(
               event: event,
               onTap: () => _openEvent(event),

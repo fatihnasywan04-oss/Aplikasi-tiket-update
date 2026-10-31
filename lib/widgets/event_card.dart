@@ -133,7 +133,7 @@ class EventCard extends StatelessWidget {
       child: const Icon(
         Icons.confirmation_number_outlined,
         color: Color(0xFF5B50E8),
-        size: 44,
+        size: 40,
       ),
     );
   }
@@ -176,7 +176,7 @@ class EventCard extends StatelessWidget {
           children: [
             // GAMBAR EVENT
             AspectRatio(
-              aspectRatio: 1.5,
+              aspectRatio: 1.6,
               child: image.isEmpty
                   ? _imagePlaceholder()
                   : Image.network(
@@ -198,9 +198,6 @@ class EventCard extends StatelessWidget {
                   children: [
                     // KATEGORI
                     Container(
-                      constraints: const BoxConstraints(
-                        maxWidth: double.infinity,
-                      ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 5,
@@ -265,7 +262,7 @@ class EventCard extends StatelessWidget {
 
                     const Spacer(),
 
-                    // HARGA
+                    // HARGA TIKET
                     Text(
                       priceRange,
                       maxLines: 2,
