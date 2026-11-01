@@ -1,3 +1,4 @@
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -580,6 +581,21 @@ class _EventFormDialog extends StatefulWidget {
 class _EventFormDialogState extends State<_EventFormDialog> {
   static const Color primary = Color(0xFF5B50E8);
 
+  static const List<String> _categories = [
+    'Jejepangan',
+    'Musik',
+    'Gaming',
+    'Anime & Cosplay',
+    'Budaya',
+    'Olahraga',
+    'Seminar',
+    'Teknologi',
+    'Pendidikan',
+    'Lainnya',
+  ];
+
+  String _selectedCategory = 'Lainnya';
+
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -596,8 +612,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   TimeOfDay? _selectedTime;
 
   bool _saving = false;
-
-  // Membedakan poster lama yang dipertahankan dari poster yang dihapus.
   bool _removeExistingImage = false;
 
   bool get _isEditing => widget.event != null;
@@ -607,6 +621,12 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     super.initState();
 
     final event = widget.event ?? <String, dynamic>{};
+
+    final existingCategory = _read(event, ['category']);
+
+    _selectedCategory = _categories.contains(existingCategory)
+        ? existingCategory
+        : 'Lainnya';
 
     _titleController = TextEditingController(
       text: _read(event, ['title', 'name', 'nama_event']),
@@ -727,10 +747,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     return 'Mulai dari ${_formatRupiah(prices.first)} - '
         '${_formatRupiah(prices.last)}';
   }
-
-  // ==========================================================
-  // PILIH POSTER DARI GALERI
-  // ==========================================================
 
   Future<void> _pickEventImage() async {
     if (_saving) return;
@@ -858,10 +874,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     );
   }
 
-  // ==========================================================
-  // KELAS TIKET
-  // ==========================================================
-
   void _addTicketClass({
     String name = '',
     String price = '0',
@@ -963,10 +975,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     });
   }
 
-  // ==========================================================
-  // VALIDASI FORM
-  // ==========================================================
-
   String? _requiredValidator(String? value, String label) {
     if (value == null || value.trim().isEmpty) {
       return '$label wajib diisi.';
@@ -1052,10 +1060,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     return null;
   }
-
-  // ==========================================================
-  // SIMPAN EVENT DAN UPLOAD POSTER
-  // ==========================================================
 
   Future<void> _save() async {
     if (_saving) return;
@@ -1151,14 +1155,12 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     });
 
     try {
-      // Poster lama dipertahankan jika tidak dihapus atau diganti.
       String? imageUrl = _removeExistingImage
           ? null
           : (_imageController.text.trim().isEmpty
                 ? null
                 : _imageController.text.trim());
 
-      // Upload gambar baru terlebih dahulu.
       if (_selectedImage != null) {
         imageUrl = await ApiService.uploadEventImage(
           File(_selectedImage!.path),
@@ -1169,6 +1171,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'location': _locationController.text.trim(),
+        'category': _selectedCategory,
         'image_url': imageUrl,
         'event_date': chosenDateTime.toIso8601String(),
         'price': price,
@@ -1193,7 +1196,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
           );
         }
 
-        // Buat setiap kelas tiket.
         for (final ticket in _ticketClasses) {
           final name = ticket.nameController.text.trim();
 
@@ -1262,6 +1264,40 @@ class _EventFormDialogState extends State<_EventFormDialog> {
             vertical: 14,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: DropdownButtonFormField<String>(
+        value: _selectedCategory,
+        decoration: InputDecoration(
+          labelText: 'Kategori Event *',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
+        ),
+        items: _categories.map((category) {
+          return DropdownMenuItem<String>(
+            value: category,
+            child: Text(category),
+          );
+        }).toList(),
+        onChanged: _saving
+            ? null
+            : (value) {
+                if (value == null) return;
+
+                setState(() {
+                  _selectedCategory = value;
+                });
+              },
       ),
     );
   }
@@ -1393,10 +1429,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     );
   }
 
-  // ==========================================================
-  // TAMPILAN FORM
-  // ==========================================================
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -1417,6 +1449,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   controller: _titleController,
                   validator: (value) => _requiredValidator(value, 'Nama event'),
                 ),
+
+                // Pilihan kategori event
+                _buildCategoryDropdown(),
+
                 _field(
                   label: 'Deskripsi *',
                   controller: _descriptionController,
