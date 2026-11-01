@@ -394,47 +394,44 @@ class _EventDetailPageState extends State<EventDetailPage> {
       backgroundColor: background,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: 270,
-            backgroundColor: primary,
-            foregroundColor: Colors.white,
-            surfaceTintColor: Colors.transparent,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              background: image.isEmpty
-                  ? Container(
-                      color: const Color(0xFFEAE8FF),
-                      child: const Center(
-                        child: Icon(
-                          Icons.confirmation_number_outlined,
-                          size: 76,
-                          color: primary,
-                        ),
-                      ),
-                    )
-                  : Image.network(
-                      image,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: const Color(0xFFEAE8FF),
-                          child: const Center(
-                            child: Icon(
-                              Icons.image_outlined,
-                              size: 70,
-                              color: primary,
-                            ),
+          
+            SliverAppBar(
+              pinned: true,
+              expandedHeight: 270,
+              backgroundColor: primary,
+              foregroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              flexibleSpace: FlexibleSpaceBar(
+                background: image.isEmpty
+                    ? Container(
+                        color: const Color(0xFFEAE8FF),
+                        child: const Center(
+                          child: Icon(
+                            Icons.confirmation_number_outlined,
+                            size: 76,
+                            color: primary,
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      )
+                    : Image.network(
+                        image,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: const Color(0xFFEAE8FF),
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_outlined,
+                                size: 70,
+                                color: primary,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
             ),
-          ),
+
 
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
