@@ -1,4 +1,3 @@
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -57,6 +56,42 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     return fallback;
   }
 
+  // Membaca timestamp API sebagai waktu WIB.
+  DateTime? _parseWibDateTime(dynamic value) {
+    if (value == null) return null;
+
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+
+    try {
+      final parsed = DateTime.parse(raw);
+
+      if (RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(raw)) {
+        final wib = parsed.toUtc().add(const Duration(hours: 7));
+
+        return DateTime(
+          wib.year,
+          wib.month,
+          wib.day,
+          wib.hour,
+          wib.minute,
+          wib.second,
+        );
+      }
+
+      return DateTime(
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   DateTime? _eventDate(Map<String, dynamic> event) {
     final raw = _value(
       event,
@@ -65,7 +100,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     );
 
     if (raw.isEmpty) return null;
-    return DateTime.tryParse(raw);
+    return _parseWibDateTime(raw);
   }
 
   DateTime? _eventEndDate(Map<String, dynamic> event) {
@@ -76,7 +111,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     );
 
     if (raw.isEmpty) return _eventDate(event);
-    return DateTime.tryParse(raw) ?? _eventDate(event);
+    return _parseWibDateTime(raw) ?? _eventDate(event);
   }
 
   String _formatDate(DateTime? date) {
@@ -104,7 +139,13 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
   String _formatDateRange(DateTime? start, DateTime? end) {
     if (start == null) return 'Tanggal belum tersedia';
-    if (end == null || start.isAtSameMomentAs(end)) {
+
+    if (end == null ||
+        (start.year == end.year &&
+            start.month == end.month &&
+            start.day == end.day &&
+            start.hour == end.hour &&
+            start.minute == end.minute)) {
       return _formatDate(start);
     }
 
@@ -628,7 +669,6 @@ class _TicketClassInput {
     stockController.dispose();
   }
 }
-
 // ============================================================
 // FORM EVENT DAN KELAS TIKET
 // ============================================================
@@ -684,6 +724,70 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
   bool get _isEditing => widget.event != null;
 
+  // Mengambil waktu sekarang berdasarkan WIB, bukan zona perangkat.
+  DateTime _nowWib() {
+    final now = DateTime.now().toUtc().add(
+      const Duration(hours: 7),
+    );
+
+    return DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      now.second,
+    );
+  }
+
+  // Membaca timestamp API sebagai waktu WIB.
+  DateTime? _parseWibDateTime(dynamic value) {
+    if (value == null) return null;
+
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+
+    try {
+      final parsed = DateTime.parse(raw);
+
+      if (RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(raw)) {
+        final wib = parsed.toUtc().add(const Duration(hours: 7));
+
+        return DateTime(
+          wib.year,
+          wib.month,
+          wib.day,
+          wib.hour,
+          wib.minute,
+          wib.second,
+        );
+      }
+
+      return DateTime(
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Mengirim tanggal dengan offset WIB secara eksplisit.
+  String _formatWibDateTime(DateTime dateTime) {
+    final year = dateTime.year.toString().padLeft(4, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final second = dateTime.second.toString().padLeft(2, '0');
+
+    return '$year-$month-${day}T$hour:$minute:$second+07:00';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -721,7 +825,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     );
 
     final rawDate = _read(event, ['event_date', 'date', 'tanggal']);
-    final parsedDate = DateTime.tryParse(rawDate);
+    final parsedDate = _parseWibDateTime(rawDate);
 
     if (parsedDate != null) {
       _selectedDate = DateTime(
@@ -732,16 +836,14 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
       _selectedTime = TimeOfDay.fromDateTime(parsedDate);
     } else {
-      final now = DateTime.now();
+      final now = _nowWib();
 
       _selectedDate = DateTime(now.year, now.month, now.day + 1);
       _selectedTime = const TimeOfDay(hour: 19, minute: 0);
     }
 
-    // Untuk event lama yang belum memiliki end_date,
-    // tanggal dan waktu selesai mengikuti tanggal dan waktu mulai.
     final rawEndDate = _read(event, ['end_date']);
-    final parsedEndDate = DateTime.tryParse(rawEndDate);
+    final parsedEndDate = _parseWibDateTime(rawEndDate);
 
     if (parsedEndDate != null) {
       _selectedEndDate = DateTime(
@@ -1039,7 +1141,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }
 
   Future<void> _pickStartDate() async {
-    final now = DateTime.now();
+    final now = _nowWib();
     final today = DateTime(now.year, now.month, now.day);
 
     final initial = _selectedDate ?? today.add(const Duration(days: 1));
@@ -1059,8 +1161,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     setState(() {
       _selectedDate = picked;
 
-      // Jika tanggal mulai melewati tanggal selesai,
-      // tanggal selesai ikut disesuaikan.
       if (_selectedEndDate == null ||
           _selectedEndDate!.isBefore(picked)) {
         _selectedEndDate = picked;
@@ -1085,7 +1185,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }
 
   Future<void> _pickEndDate() async {
-    final now = DateTime.now();
+    final now = _nowWib();
     final today = DateTime(now.year, now.month, now.day);
 
     final startDate = _selectedDate ?? today;
@@ -1243,10 +1343,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       return;
     }
 
-    // Event baru harus dimulai di masa depan.
-    // Saat edit, tanggal mulai yang sudah lewat tetap boleh dipertahankan
-    // agar admin dapat mengubah informasi event yang sedang berlangsung.
-    if (!_isEditing && !chosenDateTime.isAfter(DateTime.now())) {
+    if (!_isEditing && !chosenDateTime.isAfter(_nowWib())) {
       _message('Tanggal dan waktu mulai event harus di masa depan.');
       return;
     }
@@ -1336,8 +1433,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         'location': _locationController.text.trim(),
         'category': _selectedCategory,
         'image_url': imageUrl,
-        'event_date': chosenDateTime.toIso8601String(),
-        'end_date': chosenEndDateTime.toIso8601String(),
+
+        // Kirim tanggal dan jam menggunakan WIB secara eksplisit.
+        'event_date': _formatWibDateTime(chosenDateTime),
+        'end_date': _formatWibDateTime(chosenEndDateTime),
+
         'price': price,
         'available_tickets': stock,
       };
@@ -1746,7 +1846,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 ],
                 const SizedBox(height: 18),
                 _buildDateTimePicker(
-                  title: 'Tanggal dan waktu mulai event *',
+                  title: 'Tanggal dan waktu mulai event * (WIB)',
                   dateLabel: _dateLabel(_selectedDate),
                   timeLabel: _selectedTime?.format(context) ?? 'Pilih waktu',
                   onPickDate: _pickStartDate,
@@ -1754,7 +1854,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 ),
                 const SizedBox(height: 16),
                 _buildDateTimePicker(
-                  title: 'Tanggal dan waktu selesai event *',
+                  title: 'Tanggal dan waktu selesai event * (WIB)',
                   dateLabel: _dateLabel(_selectedEndDate),
                   timeLabel:
                       _selectedEndTime?.format(context) ?? 'Pilih waktu',
@@ -1763,6 +1863,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
+                  'Waktu yang dipilih menggunakan WIB (UTC+7). '
                   'Tanggal selesai harus sama atau setelah tanggal mulai. '
                   'Untuk event beberapa hari, pilih tanggal selesai '
                   'sesuai hari terakhir acara.',

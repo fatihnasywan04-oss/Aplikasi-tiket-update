@@ -21,6 +21,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
   static const Color dark = Color(0xFF282738);
   static const Color muted = Color(0xFF77778A);
 
+  // Zona waktu WIB (UTC+7).
+  static const Duration _wibOffset = Duration(hours: 7);
+
   bool _loadingClasses = true;
   String? _classError;
 
@@ -69,17 +72,29 @@ class _EventDetailPageState extends State<EventDetailPage> {
     return fallback;
   }
 
+  // Parsing tanggal secara konsisten menggunakan WIB.
   DateTime? _parseEventDate(dynamic value) {
     if (value == null) return null;
 
     final raw = value.toString().trim();
     if (raw.isEmpty) return null;
 
-    try {
-      return DateTime.parse(raw).toLocal();
-    } catch (_) {
-      return null;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return null;
+
+    // Periksa apakah timestamp memiliki informasi zona waktu.
+    final hasTimezone = RegExp(
+      r'(Z|[+-]\d{2}:?\d{2})$',
+      caseSensitive: false,
+    ).hasMatch(raw);
+
+    if (hasTimezone) {
+      // Konversi waktu absolut menjadi jam WIB.
+      return parsed.toUtc().add(_wibOffset);
     }
+
+    // Timestamp tanpa zona waktu dianggap sudah menggunakan WIB.
+    return parsed;
   }
 
   String _formatEventDate(DateTime date) {
@@ -350,8 +365,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
     super.initState();
     _loadTicketClasses();
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     final title = _value(
       ['title', 'name', 'nama_event'],
