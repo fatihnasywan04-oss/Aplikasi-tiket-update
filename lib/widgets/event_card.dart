@@ -25,6 +25,58 @@ class EventCard extends StatelessWidget {
     return fallback;
   }
 
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+
+    if (value is DateTime) return value;
+
+    return DateTime.tryParse(value.toString())?.toLocal();
+  }
+
+  String _formatDate(DateTime date) {
+    const months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '$day ${months[date.month - 1]} ${date.year}';
+  }
+
+  String _getEventDateRange() {
+    final startDate = _parseDate(
+      event['event_date'] ?? event['start_date'] ?? event['date'],
+    );
+
+    final endDate = _parseDate(
+      event['end_date'] ?? event['endDate'],
+    );
+
+    if (startDate == null) {
+      return 'Tanggal belum tersedia';
+    }
+
+    if (endDate == null ||
+        (startDate.year == endDate.year &&
+            startDate.month == endDate.month &&
+            startDate.day == endDate.day)) {
+      return _formatDate(startDate);
+    }
+
+    return '${_formatDate(startDate)} - ${_formatDate(endDate)}';
+  }
+
   num _toNumber(dynamic value) {
     if (value is num) return value;
     if (value == null) return 0;
@@ -160,6 +212,7 @@ class EventCard extends StatelessWidget {
       fallback: '',
     );
 
+    final eventDate = _getEventDateRange();
     final priceRange = _getPriceRange();
 
     return Card(
@@ -234,6 +287,33 @@ class EventCard extends StatelessWidget {
                     ),
 
                     const SizedBox(height: 8),
+
+                    // TANGGAL EVENT
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 14,
+                          color: Color(0xFF77778A),
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            eventDate,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              height: 1.3,
+                              color: Color(0xFF77778A),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 6),
 
                     // LOKASI
                     Row(

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import 'booking_page.dart';
@@ -30,6 +29,21 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   Map<String, dynamic> get event => widget.event;
 
+  static const List<String> _months = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+
   int? _readInt(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
@@ -55,6 +69,72 @@ class _EventDetailPageState extends State<EventDetailPage> {
     return fallback;
   }
 
+  DateTime? _parseEventDate(dynamic value) {
+    if (value == null) return null;
+
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+
+    try {
+      return DateTime.parse(raw).toLocal();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatEventDate(DateTime date) {
+    final day = date.day;
+    final month = _months[date.month - 1];
+    final year = date.year;
+
+    return '$day $month $year';
+  }
+
+  String _formatEventDateTime(DateTime date) {
+    final dateText = _formatEventDate(date);
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+
+    return '$dateText, $hour:$minute';
+  }
+
+  String get _eventDateRange {
+    final startDate = _parseEventDate(
+      event['event_date'] ??
+          event['start_date'] ??
+          event['date'] ??
+          event['tanggal'],
+    );
+
+    final endDate = _parseEventDate(
+      event['end_date'] ?? event['endDate'],
+    );
+
+    if (startDate == null) {
+      return 'Tanggal belum tersedia';
+    }
+
+    if (endDate == null || endDate.isAtSameMomentAs(startDate)) {
+      return _formatEventDateTime(startDate);
+    }
+
+    final sameDay =
+        startDate.year == endDate.year &&
+        startDate.month == endDate.month &&
+        startDate.day == endDate.day;
+
+    if (sameDay) {
+      return '${_formatEventDate(startDate)}, '
+          '${startDate.hour.toString().padLeft(2, '0')}:'
+          '${startDate.minute.toString().padLeft(2, '0')} - '
+          '${endDate.hour.toString().padLeft(2, '0')}:'
+          '${endDate.minute.toString().padLeft(2, '0')}';
+    }
+
+    return '${_formatEventDateTime(startDate)}'
+        ' - ${_formatEventDateTime(endDate)}';
+  }
+
   num _number(dynamic value) {
     if (value is num) return value;
 
@@ -62,7 +142,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
     if (raw.isEmpty) return 0;
 
-    // Mendukung format angka API dan format rupiah.
     final cleaned = raw
         .replaceAll(RegExp(r'[^0-9,.-]'), '')
         .replaceAll('.', '')
@@ -96,11 +175,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
     return name.isEmpty ? 'Tiket' : name;
   }
-
-  // ============================================================
-  // JANGKAUAN HARGA OTOMATIS
-  // Mengambil harga terendah dan tertinggi dari kelas tiket API.
-  // ============================================================
 
   String _ticketPriceRange() {
     if (_ticketClasses.isEmpty) {
@@ -179,7 +253,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
       int? selectedId;
 
-      // Pertahankan pilihan sebelumnya jika stoknya masih tersedia.
       for (final ticket in availableClasses) {
         final ticketId = _readInt(ticket['id']);
         final stock = _readInt(ticket['available_tickets']) ?? 0;
@@ -190,7 +263,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
         }
       }
 
-      // Jika belum ada pilihan, pilih kelas pertama yang masih tersedia.
       if (selectedId == null) {
         for (final ticket in availableClasses) {
           final stock = _readInt(ticket['available_tickets']) ?? 0;
@@ -296,11 +368,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
       fallback: 'Lokasi belum tersedia',
     );
 
-    final date = _value(
-      ['date', 'event_date', 'tanggal'],
-      fallback: 'Tanggal belum tersedia',
-    );
-
     final description = _value(
       ['description', 'deskripsi'],
       fallback: 'Belum ada deskripsi event.',
@@ -378,8 +445,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
                 _InfoRow(
                   icon: Icons.calendar_month_outlined,
-                  label: 'Tanggal',
-                  value: date,
+                  label: 'Tanggal event',
+                  value: _eventDateRange,
                 ),
                 const SizedBox(height: 24),
 
@@ -401,10 +468,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // =================================================
-                // KARTU JANGKAUAN HARGA
-                // =================================================
 
                 Container(
                   width: double.infinity,
