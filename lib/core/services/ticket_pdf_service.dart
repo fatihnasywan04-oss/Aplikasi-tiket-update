@@ -182,7 +182,7 @@ class TicketPdfService {
       bytes: bytes,
       fileExtension: 'pdf',
       mimeType: MimeType.pdf,
-      subfolder: 'EventTicketers',
+      subfolder: 'Hikari',
     );
   }
 
