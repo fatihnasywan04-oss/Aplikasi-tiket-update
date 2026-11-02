@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/app_bottom_navigation.dart';
 import 'home_page.dart';
 import 'explore_page.dart';
+import 'calendar_page.dart';
 import 'my_tickets_page.dart';
 import 'profile_page.dart';
 
@@ -20,6 +21,7 @@ class _UserShellState extends State<UserShell> {
   late final List<Widget> _pages = [
     const HomePage(),
     const ExplorePage(),
+    const CalendarPage(),
     const MyTicketsPage(),
     const ProfilePage(),
   ];

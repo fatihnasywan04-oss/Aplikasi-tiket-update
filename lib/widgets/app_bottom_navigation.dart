@@ -28,6 +28,11 @@ class AppBottomNavigation extends StatelessWidget {
           label: 'Jelajah',
         ),
         NavigationDestination(
+          icon: Icon(Icons.calendar_month_outlined),
+          selectedIcon: Icon(Icons.calendar_month_rounded),
+          label: 'Kalender',
+        ),
+        NavigationDestination(
           icon: Icon(Icons.confirmation_number_outlined),
           selectedIcon: Icon(Icons.confirmation_number_rounded),
           label: 'Tiket Saya',
