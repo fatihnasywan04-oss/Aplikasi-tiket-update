@@ -221,7 +221,7 @@ class _HomePageState extends State<HomePage> {
               ),
               SizedBox(width: 10),
               Text(
-                'Event Ticketers',
+                'Hikari',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 21,
