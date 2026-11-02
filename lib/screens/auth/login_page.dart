@@ -143,7 +143,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 26),
                     const Text(
-                      'Event Ticketers',
+                      'Hikari',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 28,
