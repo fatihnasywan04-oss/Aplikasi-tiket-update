@@ -1,3 +1,4 @@
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -679,6 +680,64 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
   }
 
   // ============================================================
+  // DOWNLOAD TIKET PDF
+  // ============================================================
+
+  Future<void> _downloadTicket({
+    required String eventName,
+    required String eventDate,
+    required String location,
+    required String ticketClassName,
+    required String buyerName,
+    required String buyerEmail,
+    required int orderId,
+    required String paymentStatus,
+  }) async {
+    if (!_isPaid(paymentStatus)) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tiket hanya bisa diunduh setelah pembayaran berhasil.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await TicketPdfService.downloadTicket(
+        eventName: eventName,
+        customerName: buyerName,
+        customerEmail: buyerEmail,
+        ticketName: ticketClassName,
+        ticketCode: 'ORDER-$orderId',
+        eventDate: eventDate,
+        eventLocation: location,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tiket berhasil disimpan di Download/EventTicketers.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengunduh tiket PDF: $e'),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
   // UI HELPERS
   // ============================================================
 
@@ -1139,30 +1198,62 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               expiration: expiration,
             ),
 
+            // TOMBOL BAGIKAN DAN DOWNLOAD
             if (_isPaid(paymentStatus))
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => _shareTicket(
-                      eventName: eventName,
-                      eventDate: eventDate,
-                      location: location,
-                      ticketClassName: ticketClassName,
-                      buyerName: buyerName,
-                      buyerEmail: buyerEmail,
-                      orderId: orderId,
-                      paymentStatus: paymentStatus,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _shareTicket(
+                          eventName: eventName,
+                          eventDate: eventDate,
+                          location: location,
+                          ticketClassName: ticketClassName,
+                          buyerName: buyerName,
+                          buyerEmail: buyerEmail,
+                          orderId: orderId,
+                          paymentStatus: paymentStatus,
+                        ),
+                        icon: const Icon(Icons.share_rounded),
+                        label: const Text('Bagikan Tiket'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(
+                            color: AppColors.primary,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
                     ),
-                    icon: const Icon(Icons.share_rounded),
-                    label: const Text('Bagikan Tiket'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => _downloadTicket(
+                          eventName: eventName,
+                          eventDate: eventDate,
+                          location: location,
+                          ticketClassName: ticketClassName,
+                          buyerName: buyerName,
+                          buyerEmail: buyerEmail,
+                          orderId: orderId,
+                          paymentStatus: paymentStatus,
+                        ),
+                        icon: const Icon(Icons.download_rounded),
+                        label: const Text('Download PDF'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
           ],

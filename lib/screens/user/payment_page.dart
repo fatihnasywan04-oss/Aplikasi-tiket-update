@@ -413,14 +413,66 @@ class _PaymentPageState extends State<PaymentPage> {
 
       _countdownTimer?.cancel();
 
-      _showMessage(
-        'Pembayaran simulasi berhasil dikonfirmasi.',
-      );
+      if (!mounted) return;
 
-      await Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const MyTicketsPage(),
-        ),
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            icon: const Icon(
+              Icons.check_circle_rounded,
+              color: Colors.green,
+              size: 54,
+            ),
+            title: const Text(
+              'Pembayaran Berhasil!',
+              textAlign: TextAlign.center,
+            ),
+            content: const Text(
+              'Pembayaran berhasil dikonfirmasi. '
+              'Sekarang kamu bisa kembali ke Home '
+              'atau melihat tiket yang sudah dibeli.',
+              textAlign: TextAlign.center,
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+
+                      Navigator.of(context).pushNamedAndRemoveUntil(
+                        '/home',
+                        (route) => false,
+                      );
+                    },
+                    icon: const Icon(Icons.home_rounded),
+                    label: const Text('Kembali ke Home'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (_) => const MyTicketsPage(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.confirmation_num_outlined,
+                    ),
+                    label: const Text('Lihat Tiket Saya'),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
       );
     } catch (error) {
       if (!mounted) return;
