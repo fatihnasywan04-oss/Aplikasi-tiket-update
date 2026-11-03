@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
+import '../../core/app_colors.dart';
 import '../auth/login_page.dart';
 
 class AdminDrawerPage extends StatelessWidget {
@@ -15,48 +15,30 @@ class AdminDrawerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surfaceDark,
       child: SafeArea(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF5B50E8), Color(0xFF9187FF)],
+            _buildHeader(),
+            const SizedBox(height: 16),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'MENU UTAMA',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.8,
+                  ),
                 ),
               ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.admin_panel_settings_rounded,
-                      size: 32,
-                      color: Color(0xFF5B50E8),
-                    ),
-                  ),
-                  SizedBox(height: 14),
-                  Text(
-                    'Event Ticketers',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Panel Administrator',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ],
-              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 9),
+
             _item(
               context,
               icon: Icons.dashboard_outlined,
@@ -81,32 +63,186 @@ class AdminDrawerPage extends StatelessWidget {
               title: 'Pembayaran',
               route: '/admin/payments',
             ),
-            const Spacer(),
-            const Divider(),
-            ListTile(
-              leading: const Icon(
-                Icons.logout_rounded,
-                color: Color(0xFFD94A59),
-              ),
-              title: const Text(
-                'Keluar',
-                style: TextStyle(color: Color(0xFFD94A59)),
-              ),
-              onTap: () async {
-                await ApiService.logout();
-                if (!context.mounted) return;
 
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) => const LoginPage(),
+            const Spacer(),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Divider(
+                color: AppColors.border,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  color: AppColors.error,
+                ),
+                title: const Text(
+                  'Keluar',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
                   ),
-                  (_) => false,
-                );
-              },
+                ),
+                onTap: () async {
+                  final shouldLogout = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) {
+                      return AlertDialog(
+                        backgroundColor: AppColors.surface,
+                        title: const Text(
+                          'Keluar dari Admin?',
+                          style: TextStyle(color: AppColors.text),
+                        ),
+                        content: const Text(
+                          'Apakah kamu yakin ingin keluar dari akun administrator?',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(dialogContext, false);
+                            },
+                            child: const Text('Batal'),
+                          ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.error,
+                            ),
+                            onPressed: () {
+                              Navigator.pop(dialogContext, true);
+                            },
+                            child: const Text('Keluar'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (shouldLogout != true) return;
+
+                  await ApiService.logout();
+                  if (!context.mounted) return;
+
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) => const LoginPage(),
+                    ),
+                    (_) => false,
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 12),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 27, 22, 25),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.surface,
+            AppColors.primaryPale,
+            Color(0xFF30131E),
+          ],
+        ),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.border,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(17),
+              border: Border.all(
+                color: AppColors.gold.withValues(alpha: 0.45),
+              ),
+            ),
+            child: const Icon(
+              Icons.admin_panel_settings_rounded,
+              size: 34,
+              color: AppColors.gold,
+            ),
+          ),
+          const SizedBox(height: 17),
+          const Text(
+            'HIKARI',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 23,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            'ADMIN MANAGEMENT',
+            style: TextStyle(
+              color: AppColors.gold,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.7,
+            ),
+          ),
+          const SizedBox(height: 13),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 11,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.success.withValues(alpha: 0.25),
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.circle,
+                  size: 7,
+                  color: AppColors.success,
+                ),
+                SizedBox(width: 7),
+                Text(
+                  'Panel Administrator',
+                  style: TextStyle(
+                    color: AppColors.success,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -120,28 +256,47 @@ class AdminDrawerPage extends StatelessWidget {
     final selected = currentRoute == route;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 3,
+      ),
       child: ListTile(
         selected: selected,
-        selectedTileColor: const Color(0xFFEAE8FF),
+        selectedTileColor: AppColors.primaryPale,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(13),
+          side: selected
+              ? BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.35),
+                )
+              : BorderSide.none,
         ),
         leading: Icon(
           icon,
           color: selected
-              ? const Color(0xFF5B50E8)
-              : const Color(0xFF77778A),
+              ? AppColors.gold
+              : AppColors.textMuted,
+          size: 22,
         ),
         title: Text(
           title,
           style: TextStyle(
             color: selected
-                ? const Color(0xFF5B50E8)
-                : const Color(0xFF282738),
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                ? AppColors.text
+                : AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: selected
+                ? FontWeight.bold
+                : FontWeight.normal,
           ),
         ),
+        trailing: selected
+            ? const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.gold,
+                size: 20,
+              )
+            : null,
         onTap: () {
           Navigator.pop(context);
 
