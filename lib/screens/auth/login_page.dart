@@ -126,6 +126,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // LOGO HIKARI BARU
                     Center(
                       child: Container(
                         width: 82,
@@ -134,14 +135,18 @@ class _LoginPageState extends State<LoginPage> {
                           color: AppColors.primaryPale,
                           borderRadius: BorderRadius.circular(26),
                         ),
-                        child: const Icon(
-                          Icons.confirmation_number_rounded,
-                          size: 44,
-                          color: AppColors.primary,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Image.asset(
+                            'assets/images/app_logo.png',
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 26),
+
                     const Text(
                       'Hikari',
                       textAlign: TextAlign.center,
@@ -151,7 +156,9 @@ class _LoginPageState extends State<LoginPage> {
                         color: AppColors.text,
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     const Text(
                       'Masuk untuk menemukan dan memesan tiket event favoritmu.',
                       textAlign: TextAlign.center,
@@ -160,12 +167,16 @@ class _LoginPageState extends State<LoginPage> {
                         height: 1.5,
                       ),
                     ),
+
                     const SizedBox(height: 32),
+
                     const Text(
                       'Email',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
+
                     const SizedBox(height: 8),
+
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -177,12 +188,15 @@ class _LoginPageState extends State<LoginPage> {
                         prefixIcon: Icon(Icons.email_outlined),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                                        const SizedBox(height: 18),
+
                     const Text(
                       'Password',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
+
                     const SizedBox(height: 8),
+
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
@@ -220,7 +234,9 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 26),
+
                     FilledButton(
                       onPressed: _loading ? null : _login,
                       child: Padding(
@@ -243,7 +259,9 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                       ),
                     ),
+
                     const SizedBox(height: 18),
+
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
