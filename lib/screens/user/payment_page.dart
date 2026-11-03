@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../api_service.dart';
 import '../../core/app_colors.dart';
@@ -29,6 +32,11 @@ class _PaymentPageState extends State<PaymentPage> {
 
   Map<String, dynamic>? _payment;
   String? _paymentError;
+
+  // Kode pembayaran simulasi
+  String? _virtualAccount;
+  String? _simulationCode;
+  String? _qrPayload;
 
   Timer? _countdownTimer;
   DateTime? _deadline;
@@ -77,8 +85,8 @@ class _PaymentPageState extends State<PaymentPage> {
 
       if (parsed != null) {
         return parsed.toLocal().add(
-              ApiService.paymentExpiration,
-            );
+          ApiService.paymentExpiration,
+        );
       }
     }
 
@@ -121,7 +129,7 @@ class _PaymentPageState extends State<PaymentPage> {
         await ApiService.getOrderDetail(orderId);
       }
     } catch (_) {
-      // Tampilan kedaluwarsa tetap ditampilkan meskipun refresh gagal.
+      // Tampilan kedaluwarsa tetap ditampilkan.
     } finally {
       _refreshingExpiredOrder = false;
     }
@@ -234,6 +242,77 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   // ============================================================
+  // GENERATE SIMULATION PAYMENT CODE
+  // ============================================================
+
+  String _generateDigits(int length) {
+    final random = Random.secure();
+
+    return List.generate(
+      length,
+      (_) => random.nextInt(10).toString(),
+    ).join();
+  }
+
+  void _generatePaymentCode(Map<String, dynamic> payment) {
+    if (_method == 'transfer_bank') {
+      final prefixes = {
+        'BCA': '390',
+        'BRI': '262',
+        'Mandiri': '89508',
+        'BNI': '988',
+        'BSI': '900',
+      };
+
+      final prefix = prefixes[_provider] ?? '888';
+
+      // Nomor VA simulasi 13 digit.
+      final randomLength = 13 - prefix.length;
+
+      _virtualAccount = '$prefix${_generateDigits(randomLength)}';
+      _simulationCode = _virtualAccount;
+      _qrPayload = null;
+    } else if (_method == 'e_wallet') {
+      _virtualAccount = null;
+      _simulationCode = 'HIKARI${_generateDigits(10)}';
+      _qrPayload = null;
+    } else {
+      _virtualAccount = null;
+      _simulationCode = null;
+
+      final orderId = _idFrom(['id', 'order_id']) ?? 0;
+      final paymentId = _paymentId() ?? 0;
+
+      final amount = payment['amount'] ??
+          payment['total_price'] ??
+          widget.order['total_price'] ??
+          0;
+
+      _qrPayload =
+          'HIKARI-SIMULATION'
+          '|ORDER:$orderId'
+          '|PAYMENT:$paymentId'
+          '|AMOUNT:$amount';
+    }
+  }
+
+  String _backendValue(List<String> keys) {
+    final payment = _payment;
+
+    if (payment == null) return '';
+
+    for (final key in keys) {
+      final value = payment[key]?.toString().trim();
+
+      if (value != null && value.isNotEmpty) {
+        return value;
+      }
+    }
+
+    return '';
+  }
+
+  // ============================================================
   // PAYMENT METHOD
   // ============================================================
 
@@ -306,8 +385,7 @@ class _PaymentPageState extends State<PaymentPage> {
       if (!mounted) return;
 
       final paymentId = int.tryParse(
-        (payment['id'] ?? payment['payment_id'] ?? '')
-            .toString(),
+        (payment['id'] ?? payment['payment_id'] ?? '').toString(),
       );
 
       if (paymentId == null || paymentId <= 0) {
@@ -326,6 +404,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
       setState(() {
         _payment = payment;
+        _generatePaymentCode(payment);
       });
 
       _showMessage(
@@ -350,6 +429,84 @@ class _PaymentPageState extends State<PaymentPage> {
         });
       }
     }
+  }
+
+  // ============================================================
+  // COPY PAYMENT CODE
+  // ============================================================
+
+  Future<void> _copyPaymentCode(
+    String value,
+    String label,
+  ) async {
+    if (value.isEmpty || value == '-') return;
+
+    await Clipboard.setData(
+      ClipboardData(text: value),
+    );
+
+    if (!mounted) return;
+
+    _showMessage('$label berhasil disalin.');
+  }
+
+  // ============================================================
+  // PAYMENT CODE BOX
+  // ============================================================
+
+  Widget _paymentCodeBox({
+    required String value,
+    required String label,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: AppColors.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SelectableText(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.gold,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Salin',
+            onPressed: value == '-'
+                ? null
+                : () => _copyPaymentCode(value, label),
+            icon: const Icon(
+              Icons.copy_rounded,
+              color: AppColors.gold,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ============================================================
@@ -552,6 +709,7 @@ class _PaymentPageState extends State<PaymentPage> {
     required IconData icon,
   }) {
     final selected = _method == value;
+
     final disabled = _expired ||
         _loading ||
         _confirming ||
@@ -704,6 +862,50 @@ class _PaymentPageState extends State<PaymentPage> {
         widget.order['total_price'] ??
         0;
 
+    final isBank = _method == 'transfer_bank';
+    final isQris = _method == 'qris';
+
+    // Data backend diutamakan jika tersedia.
+    final serverVa = _backendValue([
+      'virtual_account_number',
+      'va_number',
+      'account_number',
+      'payment_code',
+      'bill_key',
+    ]);
+
+    final serverQr = _backendValue([
+      'qr_string',
+      'qr_code',
+      'qr_payload',
+      'qr_content',
+    ]);
+
+    final serverQrUrl = _backendValue([
+      'qr_url',
+      'qr_image_url',
+      'qr_code_url',
+    ]);
+
+    final vaToShow = serverVa.isNotEmpty
+        ? serverVa
+        : (_virtualAccount ?? '-');
+
+    final qrToShow = serverQr.isNotEmpty
+        ? serverQr
+        : (_qrPayload ?? 'HIKARI-SIMULATION');
+
+    final walletCode = _backendValue([
+      'payment_code',
+      'payment_number',
+      'bill_key',
+      'customer_number',
+    ]);
+
+    final walletCodeToShow = walletCode.isNotEmpty
+        ? walletCode
+        : (_simulationCode ?? '-');
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -725,7 +927,7 @@ class _PaymentPageState extends State<PaymentPage> {
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Instruksi pembayaran simulasi',
+                  'Instruksi pembayaran',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -736,6 +938,7 @@ class _PaymentPageState extends State<PaymentPage> {
             ],
           ),
           const SizedBox(height: 18),
+
           _instructionRow('Metode', _providerLabel()),
           _instructionRow('Penyedia', _provider),
           _instructionRow(
@@ -744,7 +947,104 @@ class _PaymentPageState extends State<PaymentPage> {
           ),
           _instructionRow('Referensi', transactionId),
           _instructionRow('Status', status.toUpperCase()),
-          const SizedBox(height: 14),
+
+          const SizedBox(height: 18),
+
+          if (isBank) ...[
+            const Text(
+              'Nomor Virtual Account',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 9),
+            _paymentCodeBox(
+              value: vaToShow,
+              label: 'Nomor VA $_provider',
+            ),
+          ] else if (isQris) ...[
+            const Center(
+              child: Text(
+                'Scan QR Code',
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: serverQrUrl.isNotEmpty
+                    ? Image.network(
+                        serverQrUrl,
+                        width: 220,
+                        height: 220,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) {
+                          return const SizedBox(
+                            width: 220,
+                            height: 220,
+                            child: Center(
+                              child: Text(
+                                'QR tidak dapat dimuat',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : QrImageView(
+                        data: qrToShow,
+                        version: QrVersions.auto,
+                        size: 220,
+                        backgroundColor: Colors.white,
+                        errorCorrectionLevel: QrErrorCorrectLevel.M,
+                      ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'QR ini merupakan QR simulasi dan bukan kode pembayaran bank.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 12,
+              ),
+            ),
+            if (serverQr.isNotEmpty || _qrPayload != null) ...[
+              const SizedBox(height: 12),
+              _paymentCodeBox(
+                value: qrToShow,
+                label: 'Kode QR',
+              ),
+            ],
+          ] else ...[
+            const Text(
+              'Kode Pembayaran E-Wallet',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 9),
+            _paymentCodeBox(
+              value: walletCodeToShow,
+              label: 'Kode Pembayaran',
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
           Container(
             padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
@@ -765,8 +1065,8 @@ class _PaymentPageState extends State<PaymentPage> {
                 SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    'Ini hanya simulasi. Tidak ada uang yang benar-benar '
-                    'ditransfer melalui aplikasi ini.',
+                    'Pembayaran ini menggunakan kode simulasi. '
+                    'Tidak ada uang yang benar-benar ditransfer.',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       height: 1.5,
@@ -777,7 +1077,9 @@ class _PaymentPageState extends State<PaymentPage> {
               ],
             ),
           ),
+
           const SizedBox(height: 18),
+
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
