@@ -27,10 +27,11 @@ class _ExplorePageState extends State<ExplorePage> {
   String _category = 'Semua';
 
   static const List<String> _defaultCategories = [
-    'Edukasi',
-    'Hiburan',
-    'Travel',
-    'Olahraga',
+    'Culinary',
+    'Fashion',
+    'Music',
+    'Culture',
+    'Art & Craft',
   ];
 
   @override
