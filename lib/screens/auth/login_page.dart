@@ -133,7 +133,43 @@ class _LoginPageState extends State<LoginPage>
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // ANIMASI KELopak SAKURA DI LATAR BELAKANG
+          // BACKGROUND JAPANESE DARK
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF0B0A14),
+                    Color(0xFF160D19),
+                    Color(0xFF0B0A14),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // CAHAYA MERAH DI BELAKANG FORM
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, -0.35),
+                    radius: 0.85,
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.20),
+                      AppColors.primary.withValues(alpha: 0.06),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ANIMASI KELOPAK SAKURA
           Positioned.fill(
             child: IgnorePointer(
               child: AnimatedBuilder(
@@ -156,178 +192,275 @@ class _LoginPageState extends State<LoginPage>
                 padding: const EdgeInsets.all(24),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 440),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // LOGO HIKARI
-                        Center(
-                          child: Container(
-                            width: 82,
-                            height: 82,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryPale,
-                              borderRadius: BorderRadius.circular(26),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xE621101B),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                        color: AppColors.gold.withValues(alpha: 0.35),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          blurRadius: 35,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // LOGO HIKARI
+                          Center(
+                            child: Container(
+                              width: 88,
+                              height: 88,
+                              padding: const EdgeInsets.all(9),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceDark,
+                                borderRadius: BorderRadius.circular(26),
+                                border: Border.all(
+                                  color: AppColors.gold.withValues(alpha: 0.65),
+                                  width: 1.2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.25),
+                                    blurRadius: 22,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
                               child: Image.asset(
                                 'assets/images/app_logo.png',
                                 fit: BoxFit.contain,
                               ),
                             ),
                           ),
-                        ),
 
-                        const SizedBox(height: 26),
+                          const SizedBox(height: 22),
 
-                        const Text(
-                          'Hikari',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.text,
-                          ),
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        const Text(
-                          'Masuk untuk menemukan dan memesan tiket event favoritmu.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            height: 1.5,
-                          ),
-                        ),
-
-                        const SizedBox(height: 32),
-
-                        const Text(
-                          'Email',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          autofillHints: const [AutofillHints.email],
-                          validator: _validateEmail,
-                          decoration: const InputDecoration(
-                            hintText: 'Email',
-                            prefixIcon: Icon(Icons.email_outlined),
-                          ),
-                        ),
-                                                const SizedBox(height: 18),
-
-                        const Text(
-                          'Password',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.done,
-                          autofillHints: const [AutofillHints.password],
-                          onFieldSubmitted: (_) {
-                            if (!_loading) _login();
-                          },
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Password wajib diisi';
-                            }
-
-                            return null;
-                          },
-                          decoration: InputDecoration(
-                            hintText: 'Masukkan password',
-                            prefixIcon: const Icon(
-                              Icons.lock_outline_rounded,
+                          const Text(
+                            'HIKARI',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 29,
+                              letterSpacing: 5,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.text,
                             ),
-                            suffixIcon: IconButton(
-                              tooltip: _obscurePassword
-                                  ? 'Tampilkan password'
-                                  : 'Sembunyikan password',
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
+                          ),
+
+                          const SizedBox(height: 7),
+
+                          const Text(
+                            'JAPANESE EVENT EXPERIENCE',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.gold,
+                              fontSize: 10,
+                              letterSpacing: 2.2,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          Container(
+                            height: 1,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  AppColors.gold.withValues(alpha: 0.7),
+                                  Colors.transparent,
+                                ],
                               ),
                             ),
                           ),
-                        ),
 
-                        const SizedBox(height: 26),
+                          const SizedBox(height: 22),
 
-                        FilledButton(
-                          onPressed: _loading ? null : _login,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 4,
+                          const Text(
+                            'Selamat Datang',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontSize: 21,
+                              fontWeight: FontWeight.bold,
                             ),
-                            child: _loading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          const Text(
+                            'Masuk untuk menemukan dan memesan tiket event favoritmu.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              height: 1.5,
+                              fontSize: 13,
+                            ),
+                          ),
+
+                          const SizedBox(height: 28),
+
+                          const Text(
+                            'Email',
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.email],
+                            validator: _validateEmail,
+                            style: const TextStyle(
+                              color: AppColors.text,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Email',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          const Text(
+                            'Password',
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            autofillHints: const [AutofillHints.password],
+                            onFieldSubmitted: (_) {
+                              if (!_loading) _login();
+                            },
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Password wajib diisi';
+                              }
+
+                              return null;
+                            },
+                            style: const TextStyle(
+                              color: AppColors.text,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Masukkan password',
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                              ),
+                              suffixIcon: IconButton(
+                                tooltip: _obscurePassword
+                                    ? 'Tampilkan password'
+                                    : 'Sembunyikan password',
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 28),
+
+                          // TOMBOL MASUK
+                          FilledButton(
+                            onPressed: _loading ? null : _login,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 52),
+                              elevation: 4,
+                              shadowColor: AppColors.primary.withValues(alpha: 0.35),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: _loading
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'MASUK',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        letterSpacing: 2,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                  )
-                                : const Text(
-                                    'Masuk',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Flexible(
+                                child: Text(
+                                  'Belum punya akun? ',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
                                   ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text(
-                              'Belum punya akun? ',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
+                                ),
                               ),
-                            ),
-                            TextButton(
-                              onPressed: _loading
-                                  ? null
-                                  : () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              const RegisterPage(),
-                                        ),
-                                      );
-                                    },
-                              child: const Text('Daftar'),
-                            ),
-                          ],
-                        ),
-                      ],
+                              TextButton(
+                                onPressed: _loading
+                                    ? null
+                                    : () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const RegisterPage(),
+                                          ),
+                                        );
+                                      },
+                                child: const Text(
+                                  'Daftar',
+                                  style: TextStyle(
+                                    color: AppColors.gold,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -350,29 +483,27 @@ class SakuraPetalPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+
     final colors = [
+      const Color(0xFFF5C6D1),
       const Color(0xFFFFB7C5),
-      const Color(0xFFFFC1D0),
       const Color(0xFFFFD6E0),
       const Color(0xFFEFA6B8),
     ];
 
     for (int i = 0; i < 22; i++) {
-      final phase = (i / 22.0);
+      final phase = i / 22.0;
       final movement = (progress + phase) % 1.0;
 
       final baseX = (i * 67.0 + 35) % size.width;
 
       final x = baseX +
-          math.sin(
-                (movement * 2 * math.pi) + i,
-              ) *
-              22;
+          math.sin((movement * 2 * math.pi) + i) * 22;
 
       final y = movement * (size.height + 40) - 20;
 
-      final rotation =
-          movement * 2 * math.pi + i * 0.8;
+      final rotation = movement * 2 * math.pi + i * 0.8;
 
       final petalSize = 5.0 + (i % 4) * 1.5;
 

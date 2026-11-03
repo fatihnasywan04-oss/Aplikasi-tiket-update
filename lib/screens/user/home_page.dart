@@ -86,7 +86,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildEventList() {
     return SizedBox(
-      height: 360,
+      height: 390,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -99,7 +99,7 @@ class _HomePageState extends State<HomePage> {
           final event = _events[index];
 
           return SizedBox(
-            width: 240,
+            width: 270,
             child: EventCard(
               event: event,
               onTap: () => _openEvent(event),
@@ -116,7 +116,7 @@ class _HomePageState extends State<HomePage> {
         padding: EdgeInsets.all(40),
         child: Center(
           child: CircularProgressIndicator(
-            color: AppColors.primary,
+            color: AppColors.gold,
           ),
         ),
       ),
@@ -194,100 +194,139 @@ class _HomePageState extends State<HomePage> {
         20,
         MediaQuery.of(context).padding.top + 16,
         20,
-        24,
+        28,
       ),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
           colors: [
-            AppColors.primary,
-            AppColors.primaryLight,
+            Color(0xFF21101B),
+            Color(0xFF170F19),
+            Color(0xFF0B0A14),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(28),
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(30),
         ),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.gold.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.12),
+            blurRadius: 28,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // LOGO HIKARI
+          // BRAND HIKARI
           Row(
             children: [
-              Image.asset(
-                'assets/images/app_logo.png',
-                width: 40,
-                height: 40,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Hikari',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 21,
-                  fontWeight: FontWeight.bold,
+              Container(
+                width: 46,
+                height: 46,
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceDark,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppColors.gold.withValues(alpha: 0.55),
+                  ),
                 ),
+                child: Image.asset(
+                  'assets/images/app_logo.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'HIKARI',
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 21,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'JAPANESE EVENT EXPERIENCE',
+                    style: TextStyle(
+                      color: AppColors.gold,
+                      fontSize: 8,
+                      letterSpacing: 1.3,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 30),
 
+          // HEADLINE
           const Text(
-            'Temukan pengalaman seru berikutnya!',
+            'Temukan pengalaman\nseru berikutnya!',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
+              color: AppColors.text,
+              fontSize: 27,
               height: 1.25,
               fontWeight: FontWeight.bold,
+              letterSpacing: 0.2,
             ),
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           const Text(
-            'Cari event, pesan tiket, dan siapkan pengalaman terbaikmu.',
+            'Cari event, pesan tiket, dan siapkan pengalaman terbaikmu bersama Hikari.',
             style: TextStyle(
-              color: Colors.white,
-              height: 1.5,
+              color: AppColors.textSecondary,
+              height: 1.6,
+              fontSize: 13,
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 23),
 
+          // SEARCH
           AppSearchBar(
             controller: _search,
             hintText: 'Cari event favoritmu...',
             onChanged: (_) {},
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
+          // SEARCH BUTTON
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton.icon(
+            child: FilledButton.icon(
               onPressed: _openExplore,
-              icon: const Icon(
-                Icons.search_rounded,
-                color: Colors.white,
-              ),
+              icon: const Icon(Icons.search_rounded),
               label: const Text(
                 'Cari event',
                 style: TextStyle(
-                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(
-                  color: Colors.white70,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                ),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(13),
                 ),
               ),
             ),
@@ -296,34 +335,50 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-    @override
+
+  Widget _buildSectionTitle() {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(20, 26, 20, 15),
+      child: Row(
+        children: [
+          Icon(
+            Icons.auto_awesome_rounded,
+            color: AppColors.gold,
+            size: 21,
+          ),
+          SizedBox(width: 9),
+          Text(
+            'Event pilihan',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.text,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
         onRefresh: _loadEvents,
         color: AppColors.primary,
+        backgroundColor: AppColors.surface,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // HEADER
+            // HEADER HIKARI
             SliverToBoxAdapter(
               child: _buildHeader(context),
             ),
 
-            // JUDUL EVENT PILIHAN
-            const SliverPadding(
-              padding: EdgeInsets.fromLTRB(20, 24, 20, 14),
-              sliver: SliverToBoxAdapter(
-                child: Text(
-                  'Event pilihan',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.text,
-                  ),
-                ),
-              ),
+            // JUDUL EVENT
+            SliverToBoxAdapter(
+              child: _buildSectionTitle(),
             ),
 
             // LOADING, ERROR, KOSONG, ATAU DAFTAR EVENT
@@ -340,7 +395,7 @@ class _HomePageState extends State<HomePage> {
 
             // SPACING BAWAH
             const SliverToBoxAdapter(
-              child: SizedBox(height: 28),
+              child: SizedBox(height: 32),
             ),
           ],
         ),

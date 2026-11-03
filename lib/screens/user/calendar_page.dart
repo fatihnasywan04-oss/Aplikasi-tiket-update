@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
@@ -162,15 +161,25 @@ class _CalendarPageState extends State<CalendarPage> {
     return '${date.day} ${_monthName(date.month)} ${date.year}';
   }
 
+  // KALENDER
+
   Widget _buildCalendar() {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFFEAEAF3),
+          color: AppColors.border,
+          width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: TableCalendar<Map<String, dynamic>>(
         locale: 'id_ID',
@@ -186,21 +195,21 @@ class _CalendarPageState extends State<CalendarPage> {
         availableCalendarFormats: const {
           CalendarFormat.month: 'Bulan',
         },
-        headerStyle: HeaderStyle(
+        headerStyle: const HeaderStyle(
           titleCentered: true,
           formatButtonVisible: false,
-          titleTextStyle: const TextStyle(
+          titleTextStyle: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.bold,
             color: AppColors.text,
           ),
-          leftChevronIcon: const Icon(
+          leftChevronIcon: Icon(
             Icons.chevron_left_rounded,
-            color: AppColors.primary,
+            color: AppColors.gold,
           ),
-          rightChevronIcon: const Icon(
+          rightChevronIcon: Icon(
             Icons.chevron_right_rounded,
-            color: AppColors.primary,
+            color: AppColors.gold,
           ),
         ),
         daysOfWeekStyle: const DaysOfWeekStyle(
@@ -209,19 +218,26 @@ class _CalendarPageState extends State<CalendarPage> {
             fontWeight: FontWeight.w600,
           ),
           weekendStyle: TextStyle(
-            color: Colors.redAccent,
+            color: AppColors.sakura,
             fontWeight: FontWeight.w600,
           ),
         ),
         calendarStyle: CalendarStyle(
           outsideDaysVisible: false,
           isTodayHighlighted: true,
+          defaultTextStyle: const TextStyle(
+            color: AppColors.text,
+          ),
           todayDecoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.15),
+            color: AppColors.gold.withValues(alpha: 0.15),
             shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.gold,
+              width: 1,
+            ),
           ),
           todayTextStyle: const TextStyle(
-            color: AppColors.primary,
+            color: AppColors.gold,
             fontWeight: FontWeight.bold,
           ),
           selectedDecoration: const BoxDecoration(
@@ -229,18 +245,18 @@ class _CalendarPageState extends State<CalendarPage> {
             shape: BoxShape.circle,
           ),
           selectedTextStyle: const TextStyle(
-            color: Colors.white,
+            color: AppColors.text,
             fontWeight: FontWeight.bold,
           ),
           markerDecoration: const BoxDecoration(
-            color: AppColors.primaryLight,
+            color: AppColors.gold,
             shape: BoxShape.circle,
           ),
           markersMaxCount: 3,
           markerSize: 6,
           markersAlignment: Alignment.bottomCenter,
           weekendTextStyle: const TextStyle(
-            color: Colors.redAccent,
+            color: AppColors.sakura,
           ),
         ),
         onDaySelected: (selectedDay, focusedDay) {
@@ -256,92 +272,99 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
+  // KARTU EVENT
+
   Widget _buildEventCard(Map<String, dynamic> event) {
     final image = _eventImage(event);
 
-    return InkWell(
-      onTap: () => _openEvent(event),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFFEAEAF3),
-          ),
-        ),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: image.isNotEmpty
-                  ? Image.network(
-                      image,
-                      width: 85,
-                      height: 85,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) {
-                        return _imagePlaceholder();
-                      },
-                    )
-                  : _imagePlaceholder(),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openEvent(event),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.border,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _eventTitle(event),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 15,
-                        color: AppColors.primary,
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: image.isNotEmpty
+                    ? Image.network(
+                        image,
+                        width: 85,
+                        height: 85,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) {
+                          return _imagePlaceholder();
+                        },
+                      )
+                    : _imagePlaceholder(),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _eventTitle(event),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.text,
                       ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          _eventLocation(event),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(height: 9),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 15,
+                          color: AppColors.gold,
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            _eventLocation(event),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Lihat detail event',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 9),
+                    const Text(
+                      'Lihat detail event',
+                      style: TextStyle(
+                        color: AppColors.primaryLight,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.primary,
-            ),
-          ],
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.gold,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -351,14 +374,16 @@ class _CalendarPageState extends State<CalendarPage> {
     return Container(
       width: 85,
       height: 85,
-      color: AppColors.background,
+      color: AppColors.surfaceDark,
       child: const Icon(
         Icons.confirmation_number_outlined,
         size: 32,
-        color: AppColors.primary,
+        color: AppColors.gold,
       ),
     );
   }
+
+  // DAFTAR EVENT BERDASARKAN TANGGAL
 
   Widget _buildEventList() {
     final dayEvents = _eventsForDay(_selectedDay);
@@ -375,16 +400,15 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
         ),
         const SizedBox(height: 14),
-
         if (dayEvents.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFFEAEAF3),
+                color: AppColors.border,
               ),
             ),
             child: const Column(
@@ -397,6 +421,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 SizedBox(height: 10),
                 Text(
                   'Tidak ada event pada tanggal ini.',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.textSecondary,
                   ),
@@ -410,6 +435,8 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
+  // BUILD
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -417,7 +444,8 @@ class _CalendarPageState extends State<CalendarPage> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadEvents,
-          color: AppColors.primary,
+          color: AppColors.gold,
+          backgroundColor: AppColors.surface,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
@@ -444,7 +472,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   padding: EdgeInsets.all(40),
                   child: Center(
                     child: CircularProgressIndicator(
-                      color: AppColors.primary,
+                      color: AppColors.gold,
                     ),
                   ),
                 )
@@ -452,20 +480,26 @@ class _CalendarPageState extends State<CalendarPage> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.border,
+                    ),
                   ),
                   child: Column(
                     children: [
                       const Icon(
                         Icons.cloud_off_rounded,
                         size: 40,
-                        color: AppColors.primary,
+                        color: AppColors.primaryLight,
                       ),
                       const SizedBox(height: 10),
                       Text(
                         _error!,
                         textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton.icon(

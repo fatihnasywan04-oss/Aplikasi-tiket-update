@@ -1,6 +1,6 @@
-
 import 'package:flutter/material.dart';
 
+import '../../core/app_colors.dart';
 import '../../widgets/app_bottom_navigation.dart';
 import 'home_page.dart';
 import 'explore_page.dart';
@@ -29,6 +29,7 @@ class _UserShellState extends State<UserShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,

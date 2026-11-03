@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -57,9 +56,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     super.dispose();
   }
 
-  // ============================================================
   // LOAD ORDERS
-  // ============================================================
 
   Future<void> _load() async {
     if (!mounted) return;
@@ -90,9 +87,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }
   }
 
-  // ============================================================
   // ENRICH EVENT DAN KELAS TIKET
-  // ============================================================
 
   Future<void> _enrichOrders(
     List<Map<String, dynamic>> orders,
@@ -236,9 +231,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }
   }
 
-  // ============================================================
   // DATA HELPERS
-  // ============================================================
 
   Map<String, dynamic> _map(dynamic value) {
     if (value is Map<String, dynamic>) {
@@ -369,9 +362,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     return '${date.day} ${_months[date.month - 1]} ${date.year}';
   }
 
-  // ============================================================
   // STATUS
-  // ============================================================
 
   String _normalizeStatus(String status) {
     return status.trim().toLowerCase().replaceAll('-', '_');
@@ -502,9 +493,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     return orderStatus;
   }
 
-  // ============================================================
   // BATAS WAKTU PEMBAYARAN
-  // ============================================================
 
   DateTime? _expirationTime(
     Map<String, dynamic> order,
@@ -563,9 +552,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     return expiration.isAfter(DateTime.now());
   }
 
-  // ============================================================
   // NAVIGASI PEMBAYARAN
-  // ============================================================
 
   Future<void> _payNow(
     Map<String, dynamic> order,
@@ -631,9 +618,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }
   }
 
-  // ============================================================
   // BAGIKAN TIKET PDF
-  // ============================================================
 
   Future<void> _shareTicket({
     required String eventName,
@@ -679,9 +664,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }
   }
 
-  // ============================================================
   // DOWNLOAD TIKET PDF
-  // ============================================================
 
   Future<void> _downloadTicket({
     required String eventName,
@@ -737,9 +720,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     }
   }
 
-  // ============================================================
   // UI HELPERS
-  // ============================================================
 
   Widget _detailRow(
     String label,
@@ -761,7 +742,12 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               ),
             ),
           ),
-          const Text(': '),
+          const Text(
+            ': ',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+            ),
+          ),
           Expanded(
             flex: 5,
             child: Text(
@@ -783,7 +769,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       padding: const EdgeInsets.only(top: 18, bottom: 4),
       child: Row(
         children: [
-          Icon(icon, size: 19, color: AppColors.primary),
+          Icon(icon, size: 19, color: AppColors.gold),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -811,6 +797,9 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.35),
+        ),
       ),
       child: Text(
         _statusLabel(status),
@@ -823,9 +812,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     );
   }
 
-  // ============================================================
   // TOMBOL PEMBAYARAN DAN COUNTDOWN
-  // ============================================================
 
   Widget _paymentAction({
     required Map<String, dynamic> order,
@@ -853,7 +840,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                 const Icon(
                   Icons.timer_outlined,
                   size: 19,
-                  color: AppColors.primary,
+                  color: AppColors.gold,
                 ),
                 const SizedBox(width: 8),
                 const Expanded(
@@ -870,7 +857,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                   style: TextStyle(
                     color: remaining.inSeconds <= 10
                         ? AppColors.error
-                        : AppColors.primary,
+                        : AppColors.gold,
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
                   ),
@@ -884,8 +871,11 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               label: const Text('Bayar Sekarang'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.text,
                 padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -905,6 +895,9 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           decoration: BoxDecoration(
             color: AppColors.error.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: AppColors.error.withValues(alpha: 0.25),
+            ),
           ),
           child: const Text(
             'Waktu pembayaran telah habis. '
@@ -920,10 +913,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
 
     return const SizedBox.shrink();
   }
-
-  // ============================================================
-  // ORDER CARD
-  // ============================================================
+// ORDER CARD
 
   Widget _ticketCard(Map<String, dynamic> order) {
     final event = _map(order['event']);
@@ -1078,6 +1068,17 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     );
 
     return Card(
+      color: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.25),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(
+          color: AppColors.border,
+          width: 1,
+        ),
+      ),
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
       child: ExpansionTile(
@@ -1087,16 +1088,20 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           vertical: 8,
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        collapsedIconColor: AppColors.gold,
+        iconColor: AppColors.gold,
+        backgroundColor: AppColors.surface,
+        collapsedBackgroundColor: AppColors.surface,
         leading: Container(
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.10),
+            color: AppColors.primary.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(
             Icons.confirmation_number_rounded,
-            color: AppColors.primary,
+            color: AppColors.gold,
             size: 27,
           ),
         ),
@@ -1128,7 +1133,10 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           ),
         ),
         children: [
-          const Divider(height: 20),
+          const Divider(
+            height: 20,
+            color: AppColors.border,
+          ),
 
           if (imageUrl.startsWith('https://') ||
               imageUrl.startsWith('http://'))
@@ -1175,7 +1183,10 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
           _detailRow('Nama pemesan', buyerName),
           _detailRow('Email pemesan', buyerEmail),
 
-          _sectionTitle('Informasi pembayaran', Icons.payment_rounded),
+          _sectionTitle(
+            'Informasi pembayaran',
+            Icons.payment_rounded,
+          ),
           _detailRow('Status pesanan', _statusLabel(orderStatus)),
           _detailRow(
             'Status pembayaran',
@@ -1219,12 +1230,15 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                         icon: const Icon(Icons.share_rounded),
                         label: const Text('Bagikan Tiket'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
+                          foregroundColor: AppColors.gold,
                           side: const BorderSide(
-                            color: AppColors.primary,
+                            color: AppColors.gold,
                           ),
                           padding: const EdgeInsets.symmetric(
                             vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
@@ -1246,9 +1260,12 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                         label: const Text('Download PDF'),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.text,
                           padding: const EdgeInsets.symmetric(
                             vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
@@ -1262,22 +1279,28 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
     );
   }
 
-  // ============================================================
   // PAGE
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         title: const Text(
           'Tiket Saya',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: AppColors.text,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         actions: [
           IconButton(
             tooltip: 'Muat ulang',
             onPressed: _loading ? null : _load,
+            color: AppColors.gold,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
@@ -1285,7 +1308,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
       body: _loading
           ? const Center(
               child: CircularProgressIndicator(
-                color: AppColors.primary,
+                color: AppColors.gold,
               ),
             )
           : _error != null
@@ -1330,7 +1353,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
               : _orders.isEmpty
                   ? RefreshIndicator(
                       onRefresh: _load,
-                      color: AppColors.primary,
+                      color: AppColors.gold,
+                      backgroundColor: AppColors.surface,
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
                         children: const [
@@ -1338,7 +1362,7 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                           Icon(
                             Icons.confirmation_number_outlined,
                             size: 58,
-                            color: AppColors.primaryLight,
+                            color: AppColors.gold,
                           ),
                           SizedBox(height: 12),
                           Center(
@@ -1366,7 +1390,8 @@ class _MyTicketsPageState extends State<MyTicketsPage> {
                     )
                   : RefreshIndicator(
                       onRefresh: _load,
-                      color: AppColors.primary,
+                      color: AppColors.gold,
+                      backgroundColor: AppColors.surface,
                       child: ListView.separated(
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.all(20),

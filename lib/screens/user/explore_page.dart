@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -27,7 +26,6 @@ class _ExplorePageState extends State<ExplorePage> {
 
   String _category = 'Semua';
 
-  // Kategori bawaan tetap ditampilkan meskipun belum ada event.
   static const List<String> _defaultCategories = [
     'Edukasi',
     'Hiburan',
@@ -52,9 +50,7 @@ class _ExplorePageState extends State<ExplorePage> {
     super.dispose();
   }
 
-  // =========================================================
   // MEMUAT EVENT DARI BACKEND
-  // =========================================================
 
   Future<void> _loadEvents() async {
     if (mounted) {
@@ -83,9 +79,7 @@ class _ExplorePageState extends State<ExplorePage> {
     }
   }
 
-  // =========================================================
   // MEMBACA DATA EVENT
-  // =========================================================
 
   String _field(
     Map<String, dynamic> event,
@@ -106,9 +100,7 @@ class _ExplorePageState extends State<ExplorePage> {
     return value.trim().toLowerCase();
   }
 
-  // =========================================================
   // KATEGORI DINAMIS DARI BACKEND
-  // =========================================================
 
   List<String> get _categories {
     final categories = <String>[
@@ -138,9 +130,7 @@ class _ExplorePageState extends State<ExplorePage> {
     return categories;
   }
 
-  // =========================================================
   // FILTER EVENT
-  // =========================================================
 
   List<Map<String, dynamic>> _filteredEvents() {
     final query = _search.text.trim().toLowerCase();
@@ -173,9 +163,7 @@ class _ExplorePageState extends State<ExplorePage> {
     }).toList();
   }
 
-  // =========================================================
   // WIDGET KATEGORI
-  // =========================================================
 
   Widget _buildCategories() {
     final categories = _categories;
@@ -196,13 +184,13 @@ class _ExplorePageState extends State<ExplorePage> {
             label: Text(item),
             selected: selected,
             showCheckmark: true,
-            checkmarkColor: AppColors.primary,
+            checkmarkColor: AppColors.gold,
             selectedColor: AppColors.primaryPale,
-            backgroundColor: Colors.white,
+            backgroundColor: AppColors.surface,
             side: BorderSide(
               color: selected
-                  ? AppColors.primaryPale
-                  : Colors.grey.shade300,
+                  ? AppColors.primary
+                  : AppColors.border,
               width: 1.2,
             ),
             shape: RoundedRectangleBorder(
@@ -210,7 +198,7 @@ class _ExplorePageState extends State<ExplorePage> {
             ),
             labelStyle: TextStyle(
               color: selected
-                  ? AppColors.primary
+                  ? AppColors.text
                   : AppColors.textSecondary,
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -230,9 +218,7 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  // =========================================================
   // TAMPILAN KETIKA EVENT KOSONG
-  // =========================================================
 
   Widget _buildEmptyState() {
     return const Center(
@@ -270,9 +256,7 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  // =========================================================
   // TAMPILAN KETIKA GAGAL MEMUAT EVENT
-  // =========================================================
 
   Widget _buildErrorState() {
     return Center(
@@ -291,12 +275,16 @@ class _ExplorePageState extends State<ExplorePage> {
               'Gagal memuat daftar event.',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
+                color: AppColors.text,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               _error ?? 'Terjadi kesalahan.',
               textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -310,9 +298,7 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  // =========================================================
   // TAMPILAN GRID EVENT
-  // =========================================================
 
   Widget _buildEventGrid(List<Map<String, dynamic>> filtered) {
     if (filtered.isEmpty) {
@@ -322,6 +308,7 @@ class _ExplorePageState extends State<ExplorePage> {
     return RefreshIndicator(
       onRefresh: _loadEvents,
       color: AppColors.primary,
+      backgroundColor: AppColors.surface,
       child: GridView.builder(
         padding: const EdgeInsets.fromLTRB(
           20,
@@ -358,9 +345,7 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  // =========================================================
   // BUILD
-  // =========================================================
 
   @override
   Widget build(BuildContext context) {
@@ -369,9 +354,13 @@ class _ExplorePageState extends State<ExplorePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         title: const Text(
           'Jelajahi Event',
           style: TextStyle(
+            color: AppColors.text,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -391,12 +380,21 @@ class _ExplorePageState extends State<ExplorePage> {
               onChanged: (_) {
                 setState(() {});
               },
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 14,
+              ),
+              cursorColor: AppColors.primary,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText: 'Cari nama atau lokasi event',
+                hintStyle: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 14,
+                ),
                 prefixIcon: const Icon(
                   Icons.search_rounded,
-                  color: AppColors.primary,
+                  color: AppColors.gold,
                 ),
                 suffixIcon: _search.text.isEmpty
                     ? null
@@ -407,8 +405,34 @@ class _ExplorePageState extends State<ExplorePage> {
                         },
                         icon: const Icon(
                           Icons.close_rounded,
+                          color: AppColors.textSecondary,
                         ),
                       ),
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: AppColors.border,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: AppColors.border,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: AppColors.primary,
+                    width: 1.5,
+                  ),
+                ),
               ),
             ),
           ),
@@ -423,7 +447,7 @@ class _ExplorePageState extends State<ExplorePage> {
             child: _loading
                 ? const Center(
                     child: CircularProgressIndicator(
-                      color: AppColors.primary,
+                      color: AppColors.gold,
                     ),
                   )
                 : _error != null

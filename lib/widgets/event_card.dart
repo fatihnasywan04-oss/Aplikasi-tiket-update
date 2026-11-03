@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_colors.dart';
+
 class EventCard extends StatelessWidget {
   final Map<String, dynamic> event;
   final VoidCallback onTap;
@@ -27,7 +29,6 @@ class EventCard extends StatelessWidget {
 
   DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
-
     if (value is DateTime) return value;
 
     return DateTime.tryParse(value.toString())?.toLocal();
@@ -180,13 +181,42 @@ class EventCard extends StatelessWidget {
 
   Widget _imagePlaceholder() {
     return Container(
-      color: const Color(0xFFEAE8FF),
+      color: AppColors.surfaceDark,
       alignment: Alignment.center,
       child: const Icon(
         Icons.confirmation_number_outlined,
-        color: Color(0xFF5B50E8),
-        size: 40,
+        color: AppColors.gold,
+        size: 42,
       ),
+    );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String text,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          size: 15,
+          color: AppColors.gold,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              height: 1.4,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -217,10 +247,16 @@ class EventCard extends StatelessWidget {
 
     return Card(
       margin: EdgeInsets.zero,
-      elevation: 2,
+      color: AppColors.surface,
+      elevation: 5,
+      shadowColor: Colors.black.withValues(alpha: 0.35),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(19),
+        side: BorderSide(
+          color: AppColors.gold.withValues(alpha: 0.25),
+          width: 1,
+        ),
       ),
       child: InkWell(
         onTap: onTap,
@@ -229,35 +265,61 @@ class EventCard extends StatelessWidget {
           children: [
             // GAMBAR EVENT
             AspectRatio(
-              aspectRatio: 1.6,
-              child: image.isEmpty
-                  ? _imagePlaceholder()
-                  : Image.network(
-                      image,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, error, stackTrace) {
-                        return _imagePlaceholder();
-                      },
+              aspectRatio: 1.65,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  image.isEmpty
+                      ? _imagePlaceholder()
+                      : Image.network(
+                          image,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, error, stackTrace) {
+                            return _imagePlaceholder();
+                          },
+                        ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 48,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.45),
+                          ],
+                        ),
+                      ),
                     ),
+                  ),
+                ],
+              ),
             ),
 
             // INFORMASI EVENT
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // KATEGORI
                     Container(
+                      constraints: const BoxConstraints(maxWidth: 180),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 5,
+                        horizontal: 10,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEAE8FF),
-                        borderRadius: BorderRadius.circular(7),
+                        color: AppColors.primaryPale,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.35),
+                        ),
                       ),
                       child: Text(
                         category,
@@ -266,12 +328,12 @@ class EventCard extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF5B50E8),
+                          color: AppColors.gold,
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 9),
+                    const SizedBox(height: 11),
 
                     // JUDUL EVENT
                     Text(
@@ -279,68 +341,38 @@ class EventCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.3,
+                        fontSize: 15,
+                        height: 1.35,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF282738),
+                        color: AppColors.text,
                       ),
+                    ),
+
+                    const SizedBox(height: 11),
+
+                    // TANGGAL EVENT
+                    _buildInfoRow(
+                      icon: Icons.calendar_today_outlined,
+                      text: eventDate,
                     ),
 
                     const SizedBox(height: 8),
 
-                    // TANGGAL EVENT
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.calendar_today_outlined,
-                          size: 14,
-                          color: Color(0xFF77778A),
-                        ),
-                        const SizedBox(width: 5),
-                        Expanded(
-                          child: Text(
-                            eventDate,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              height: 1.3,
-                              color: Color(0xFF77778A),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 6),
-
                     // LOKASI
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.location_on_outlined,
-                          size: 15,
-                          color: Color(0xFF77778A),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            location,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              height: 1.3,
-                              color: Color(0xFF77778A),
-                            ),
-                          ),
-                        ),
-                      ],
+                    _buildInfoRow(
+                      icon: Icons.location_on_outlined,
+                      text: location,
                     ),
 
                     const Spacer(),
+
+                    Container(
+                      height: 1,
+                      width: double.infinity,
+                      color: AppColors.border,
+                    ),
+
+                    const SizedBox(height: 10),
 
                     // HARGA TIKET
                     Text(
@@ -348,9 +380,9 @@ class EventCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF5B50E8),
+                        color: AppColors.gold,
                         fontSize: 13,
-                        height: 1.3,
+                        height: 1.4,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -363,7 +395,7 @@ class EventCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 10,
-                        color: Color(0xFF77778A),
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
+import '../../core/app_colors.dart';
 import 'payment_page.dart';
 
 class BookingPage extends StatefulWidget {
@@ -23,13 +24,6 @@ class _BookingPageState extends State<BookingPage> {
   List<Map<String, dynamic>> _ticketClasses = [];
   int? _selectedClassId;
   String? _classError;
-
-  static const Color _primary = Color(0xFF5B50E8);
-  static const Color _palePurple = Color(0xFFEAE8FF);
-  static const Color _textColor = Color(0xFF282738);
-  static const Color _secondaryText = Color(0xFF77778A);
-  static const Color _background = Color(0xFFF7F7FC);
-  static const Color _border = Color(0xFFEAEAF3);
 
   @override
   void initState() {
@@ -115,14 +109,10 @@ class _BookingPageState extends State<BookingPage> {
 
     var raw = value.toString().trim();
 
-    // Mendukung harga berupa angka atau string rupiah.
     raw = raw.replaceAll(RegExp(r'[^0-9,.\-]'), '');
 
     if (raw.isEmpty) return fallback;
 
-    // Harga dari API sebaiknya berupa angka.
-    // Untuk format string Indonesia seperti 150.000,00,
-    // titik pemisah ribuan dihapus dan koma menjadi desimal.
     if (raw.contains(',') && raw.contains('.')) {
       if (raw.lastIndexOf(',') > raw.lastIndexOf('.')) {
         raw = raw.replaceAll('.', '').replaceAll(',', '.');
@@ -189,10 +179,6 @@ class _BookingPageState extends State<BookingPage> {
   // ============================================================
 
   Future<void> _loadTicketClasses() async {
-    if (_loadingClasses) {
-      // Tetap izinkan pemuatan awal dan refresh.
-    }
-
     final eventId = _eventId;
 
     if (eventId == null) {
@@ -220,14 +206,11 @@ class _BookingPageState extends State<BookingPage> {
 
       if (!mounted) return;
 
-      // Salin list sebelum diurutkan agar tidak mengubah list
-      // milik pemanggil atau data yang digunakan di tempat lain.
       final classes = response
           .map((item) => Map<String, dynamic>.from(item))
           .where((item) => _toInt(item['id']) > 0)
           .toList();
 
-      // Prioritaskan VVIP, VIP, lalu Standard.
       const priority = {
         'VVIP': 0,
         'VIP': 1,
@@ -274,14 +257,13 @@ class _BookingPageState extends State<BookingPage> {
           }
         }
 
-        // Jika kelas yang dipilih sudah habis, pilih kelas lain
-        // yang tersedia jika ada.
         if (_selectedClassId != null) {
-          final currentClass = classes.cast<Map<String, dynamic>?>().firstWhere(
-                (item) =>
-                    _toInt(item?['id']) == _selectedClassId,
-                orElse: () => null,
-              );
+          final currentClass =
+              classes.cast<Map<String, dynamic>?>().firstWhere(
+                    (item) =>
+                        _toInt(item?['id']) == _selectedClassId,
+                    orElse: () => null,
+                  );
 
           if (currentClass != null &&
               _toInt(currentClass['available_tickets']) <= 0) {
@@ -481,13 +463,17 @@ class _BookingPageState extends State<BookingPage> {
 
     return Card(
       elevation: 0,
-      color: selected
-          ? const Color(0xFFF0EEFF)
-          : Colors.white,
+      color: soldOut
+          ? AppColors.surfaceDark
+          : selected
+              ? AppColors.primaryPale
+              : AppColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: selected ? _primary : _border,
+          color: selected
+              ? AppColors.primary
+              : AppColors.border,
           width: selected ? 1.6 : 1,
         ),
       ),
@@ -505,13 +491,15 @@ class _BookingPageState extends State<BookingPage> {
                 height: 46,
                 decoration: BoxDecoration(
                   color: soldOut
-                      ? Colors.grey.shade100
-                      : _palePurple,
+                      ? AppColors.background
+                      : AppColors.primary.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(13),
                 ),
                 child: Icon(
                   Icons.confirmation_number_outlined,
-                  color: soldOut ? Colors.grey : _primary,
+                  color: soldOut
+                      ? AppColors.textMuted
+                      : AppColors.gold,
                 ),
               ),
               const SizedBox(width: 12),
@@ -521,8 +509,10 @@ class _BookingPageState extends State<BookingPage> {
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
-                        color: _textColor,
+                      style: TextStyle(
+                        color: soldOut
+                            ? AppColors.textMuted
+                            : AppColors.text,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -531,7 +521,7 @@ class _BookingPageState extends State<BookingPage> {
                     Text(
                       _formatRupiah(price),
                       style: const TextStyle(
-                        color: _primary,
+                        color: AppColors.gold,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -542,8 +532,8 @@ class _BookingPageState extends State<BookingPage> {
                           : 'Tersedia: $stock tiket',
                       style: TextStyle(
                         color: soldOut
-                            ? Colors.red
-                            : _secondaryText,
+                            ? AppColors.error
+                            : AppColors.textMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -557,7 +547,11 @@ class _BookingPageState extends State<BookingPage> {
                     : selected
                         ? Icons.radio_button_checked
                         : Icons.radio_button_off,
-                color: soldOut ? Colors.grey : _primary,
+                color: soldOut
+                    ? AppColors.textMuted
+                    : selected
+                        ? AppColors.primaryLight
+                        : AppColors.textMuted,
               ),
             ],
           ),
@@ -572,16 +566,13 @@ class _BookingPageState extends State<BookingPage> {
 
   Widget _buildQuantitySelector() {
     final noStock = _stock <= 0;
-
     final maxQuantity = _stock < 10 ? _stock : 10;
 
     return Row(
       children: [
         IconButton.filledTonal(
           tooltip: 'Kurangi tiket',
-          onPressed: !_loading &&
-                  !noStock &&
-                  _quantity > 1
+          onPressed: !_loading && !noStock && _quantity > 1
               ? () {
                   setState(() {
                     _quantity--;
@@ -589,8 +580,9 @@ class _BookingPageState extends State<BookingPage> {
                 }
               : null,
           style: IconButton.styleFrom(
-            foregroundColor: _primary,
-            backgroundColor: _palePurple,
+            foregroundColor: AppColors.text,
+            backgroundColor: AppColors.primaryPale,
+            disabledForegroundColor: AppColors.textMuted,
           ),
           icon: const Icon(Icons.remove_rounded),
         ),
@@ -598,7 +590,7 @@ class _BookingPageState extends State<BookingPage> {
         Text(
           '$_quantity',
           style: const TextStyle(
-            color: _textColor,
+            color: AppColors.text,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -617,8 +609,9 @@ class _BookingPageState extends State<BookingPage> {
                 }
               : null,
           style: IconButton.styleFrom(
-            foregroundColor: _primary,
-            backgroundColor: _palePurple,
+            foregroundColor: AppColors.text,
+            backgroundColor: AppColors.primaryPale,
+            disabledForegroundColor: AppColors.textMuted,
           ),
           icon: const Icon(Icons.add_rounded),
         ),
@@ -626,7 +619,7 @@ class _BookingPageState extends State<BookingPage> {
         Text(
           'Maks. $maxQuantity tiket',
           style: const TextStyle(
-            color: _secondaryText,
+            color: AppColors.textMuted,
             fontSize: 12,
           ),
         ),
@@ -641,26 +634,37 @@ class _BookingPageState extends State<BookingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
           'Pesan Tiket',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: _textColor,
+            color: AppColors.text,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
-        iconTheme: const IconThemeData(
-          color: _textColor,
+        foregroundColor: AppColors.text,
+        elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(
+            height: 1,
+            thickness: 1,
+            color: AppColors.border,
+          ),
         ),
       ),
       body: _loadingClasses
           ? const Center(
-              child: CircularProgressIndicator(),
+              child: CircularProgressIndicator(
+                color: AppColors.gold,
+              ),
             )
           : RefreshIndicator(
+              color: AppColors.gold,
+              backgroundColor: AppColors.surface,
               onRefresh: _loadTicketClasses,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -672,13 +676,28 @@ class _BookingPageState extends State<BookingPage> {
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [
-                          _primary,
-                          Color(0xFF9187FF),
+                          AppColors.primary,
+                          Color(0xFF7D292F),
+                          AppColors.surface,
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: AppColors.primaryLight.withValues(
+                          alpha: 0.35,
+                        ),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(
+                            alpha: 0.13,
+                          ),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -686,13 +705,13 @@ class _BookingPageState extends State<BookingPage> {
                         const Icon(
                           Icons.confirmation_number_rounded,
                           size: 38,
-                          color: Colors.white,
+                          color: AppColors.gold,
                         ),
                         const SizedBox(height: 14),
                         const Text(
                           'Pilih tiket favoritmu!',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.text,
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                           ),
@@ -701,16 +720,16 @@ class _BookingPageState extends State<BookingPage> {
                         Text(
                           _eventTitle,
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: AppColors.textSecondary,
                             height: 1.5,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 10),
                         Row(
                           children: [
                             const Icon(
                               Icons.location_on_outlined,
-                              color: Colors.white70,
+                              color: AppColors.gold,
                               size: 17,
                             ),
                             const SizedBox(width: 5),
@@ -718,7 +737,7 @@ class _BookingPageState extends State<BookingPage> {
                               child: Text(
                                 _eventLocation,
                                 style: const TextStyle(
-                                  color: Colors.white70,
+                                  color: AppColors.textSecondary,
                                 ),
                               ),
                             ),
@@ -728,26 +747,41 @@ class _BookingPageState extends State<BookingPage> {
                     ),
                   ),
 
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 26),
 
-                  const Text(
-                    'Pilih kelas tiket',
-                    style: TextStyle(
-                      color: _textColor,
-                      fontSize: 19,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.confirmation_number_outlined,
+                        color: AppColors.gold,
+                        size: 21,
+                      ),
+                      SizedBox(width: 9),
+                      Text(
+                        'Pilih kelas tiket',
+                        style: TextStyle(
+                          color: AppColors.text,
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
                   // ERROR STATE
                   if (_classError != null) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.red.shade50,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppColors.error.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -755,7 +789,8 @@ class _BookingPageState extends State<BookingPage> {
                           Text(
                             _classError!,
                             style: const TextStyle(
-                              color: Colors.red,
+                              color: AppColors.error,
+                              height: 1.5,
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -773,15 +808,17 @@ class _BookingPageState extends State<BookingPage> {
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _border),
+                        border: Border.all(
+                          color: AppColors.border,
+                        ),
                       ),
                       child: const Text(
                         'Kelas tiket belum tersedia untuk event ini. '
                         'Admin perlu menambahkan kelas tiket terlebih dahulu.',
                         style: TextStyle(
-                          color: _secondaryText,
+                          color: AppColors.textSecondary,
                           height: 1.5,
                         ),
                       ),
@@ -795,26 +832,38 @@ class _BookingPageState extends State<BookingPage> {
 
                     Card(
                       elevation: 0,
-                      color: Colors.white,
+                      color: AppColors.surface,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
-                        side: const BorderSide(color: _border),
+                        side: const BorderSide(
+                          color: AppColors.border,
+                        ),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(18),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Ringkasan pesanan',
-                              style: TextStyle(
-                                color: _textColor,
-                                fontSize: 19,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.receipt_long_outlined,
+                                  color: AppColors.gold,
+                                  size: 21,
+                                ),
+                                SizedBox(width: 9),
+                                Text(
+                                  'Ringkasan pesanan',
+                                  style: TextStyle(
+                                    color: AppColors.text,
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
 
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 18),
 
                             Row(
                               children: [
@@ -822,7 +871,7 @@ class _BookingPageState extends State<BookingPage> {
                                   child: Text(
                                     'Kelas tiket',
                                     style: TextStyle(
-                                      color: _secondaryText,
+                                      color: AppColors.textMuted,
                                     ),
                                   ),
                                 ),
@@ -832,7 +881,7 @@ class _BookingPageState extends State<BookingPage> {
                                         .toString(),
                                     textAlign: TextAlign.end,
                                     style: const TextStyle(
-                                      color: _textColor,
+                                      color: AppColors.text,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -848,14 +897,14 @@ class _BookingPageState extends State<BookingPage> {
                                   child: Text(
                                     'Harga per tiket',
                                     style: TextStyle(
-                                      color: _secondaryText,
+                                      color: AppColors.textMuted,
                                     ),
                                   ),
                                 ),
                                 Text(
                                   _formatRupiah(_price),
                                   style: const TextStyle(
-                                    color: _textColor,
+                                    color: AppColors.text,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -867,7 +916,7 @@ class _BookingPageState extends State<BookingPage> {
                             const Text(
                               'Jumlah tiket',
                               style: TextStyle(
-                                color: _textColor,
+                                color: AppColors.text,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -878,7 +927,7 @@ class _BookingPageState extends State<BookingPage> {
 
                             const Divider(
                               height: 30,
-                              color: _border,
+                              color: AppColors.border,
                             ),
 
                             Row(
@@ -887,7 +936,7 @@ class _BookingPageState extends State<BookingPage> {
                                   child: Text(
                                     'Total pembayaran',
                                     style: TextStyle(
-                                      color: _textColor,
+                                      color: AppColors.text,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -897,7 +946,7 @@ class _BookingPageState extends State<BookingPage> {
                                     _formatRupiah(_total),
                                     textAlign: TextAlign.end,
                                     style: const TextStyle(
-                                      color: _primary,
+                                      color: AppColors.gold,
                                       fontSize: 19,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -915,11 +964,18 @@ class _BookingPageState extends State<BookingPage> {
                     // CREATE ORDER BUTTON
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: _primary,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.text,
+                        disabledBackgroundColor: AppColors.border,
+                        disabledForegroundColor: AppColors.textMuted,
                         minimumSize: const Size.fromHeight(54),
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
+                          side: const BorderSide(
+                            color: AppColors.primaryLight,
+                            width: 0.5,
+                          ),
                         ),
                       ),
                       onPressed: _loading ||
@@ -934,12 +990,13 @@ class _BookingPageState extends State<BookingPage> {
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
-                                color: Colors.white,
+                                color: AppColors.gold,
                                 strokeWidth: 2,
                               ),
                             )
                           : const Icon(
                               Icons.arrow_forward_rounded,
+                              color: AppColors.gold,
                             ),
                       label: Text(
                         _loading
@@ -953,7 +1010,7 @@ class _BookingPageState extends State<BookingPage> {
                     ),
                   ],
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
 
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -961,7 +1018,7 @@ class _BookingPageState extends State<BookingPage> {
                       Icon(
                         Icons.lock_outline_rounded,
                         size: 15,
-                        color: _secondaryText,
+                        color: AppColors.gold,
                       ),
                       SizedBox(width: 6),
                       Flexible(
@@ -970,7 +1027,7 @@ class _BookingPageState extends State<BookingPage> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 12,
-                            color: _secondaryText,
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -53,6 +54,10 @@ class _PaymentPageState extends State<PaymentPage> {
       );
     }
   }
+
+  // ============================================================
+  // COUNTDOWN
+  // ============================================================
 
   DateTime _readDeadline() {
     final expiresAt = widget.order['expires_at']?.toString();
@@ -135,6 +140,10 @@ class _PaymentPageState extends State<PaymentPage> {
     _countdownTimer?.cancel();
     super.dispose();
   }
+
+  // ============================================================
+  // DATA HELPERS
+  // ============================================================
 
   String _value(
     List<String> keys, {
@@ -224,6 +233,10 @@ class _PaymentPageState extends State<PaymentPage> {
     }
   }
 
+  // ============================================================
+  // PAYMENT METHOD
+  // ============================================================
+
   void _selectMethod(String method) {
     if (_expired ||
         _loading ||
@@ -245,9 +258,16 @@ class _PaymentPageState extends State<PaymentPage> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
   }
+
+  // ============================================================
+  // CREATE PAYMENT
+  // ============================================================
 
   Future<void> _submitPayment() async {
     if (_expired) {
@@ -332,6 +352,10 @@ class _PaymentPageState extends State<PaymentPage> {
     }
   }
 
+  // ============================================================
+  // CONFIRM PAYMENT
+  // ============================================================
+
   Future<void> _confirmSimulation() async {
     if (_expired) {
       _showMessage(
@@ -353,11 +377,28 @@ class _PaymentPageState extends State<PaymentPage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Konfirmasi simulasi'),
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          icon: const Icon(
+            Icons.help_outline_rounded,
+            color: AppColors.gold,
+            size: 42,
+          ),
+          title: const Text(
+            'Konfirmasi simulasi',
+            style: TextStyle(
+              color: AppColors.text,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: const Text(
             'Lanjutkan simulasi pembayaran? '
             'Jika backend menerima konfirmasi, status pembayaran '
             'dan pesanan akan diperbarui.',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
           ),
           actions: [
             TextButton(
@@ -420,20 +461,30 @@ class _PaymentPageState extends State<PaymentPage> {
         barrierDismissible: false,
         builder: (dialogContext) {
           return AlertDialog(
+            backgroundColor: AppColors.surface,
+            surfaceTintColor: Colors.transparent,
             icon: const Icon(
               Icons.check_circle_rounded,
-              color: Colors.green,
+              color: AppColors.success,
               size: 54,
             ),
             title: const Text(
               'Pembayaran Berhasil!',
               textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             content: const Text(
               'Pembayaran berhasil dikonfirmasi. '
               'Sekarang kamu bisa kembali ke Home '
               'atau melihat tiket yang sudah dibeli.',
               textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
             ),
             actionsAlignment: MainAxisAlignment.center,
             actions: [
@@ -490,6 +541,10 @@ class _PaymentPageState extends State<PaymentPage> {
     }
   }
 
+  // ============================================================
+  // PAYMENT METHOD CARD
+  // ============================================================
+
   Widget _methodTile({
     required String value,
     required String title,
@@ -503,39 +558,66 @@ class _PaymentPageState extends State<PaymentPage> {
         _payment != null;
 
     return Card(
-      color: selected ? const Color(0xFFF0EEFF) : Colors.white,
+      elevation: 0,
+      color: selected
+          ? AppColors.primaryPale
+          : AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: selected
+              ? AppColors.primary
+              : AppColors.border,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 15,
+          vertical: 5,
+        ),
         onTap: disabled ? null : () => _selectMethod(value),
         leading: Container(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: AppColors.primaryPale,
+            color: AppColors.primary.withValues(alpha: 0.14),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
             icon,
-            color: AppColors.primary,
+            color: AppColors.gold,
           ),
         ),
         title: Text(
           title,
           style: const TextStyle(
+            color: AppColors.text,
             fontWeight: FontWeight.w600,
           ),
         ),
-        subtitle: Text(subtitle),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 12,
+          ),
+        ),
         trailing: Icon(
           selected
               ? Icons.radio_button_checked
               : Icons.radio_button_off,
           color: selected
-              ? AppColors.primary
-              : AppColors.textSecondary,
+              ? AppColors.primaryLight
+              : AppColors.textMuted,
         ),
       ),
     );
   }
+
+  // ============================================================
+  // PROVIDER SELECTOR
+  // ============================================================
 
   Widget _providerSelector() {
     final providers = _providers[_method]!;
@@ -552,6 +634,7 @@ class _PaymentPageState extends State<PaymentPage> {
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
+            color: AppColors.text,
           ),
         ),
         const SizedBox(height: 10),
@@ -576,10 +659,16 @@ class _PaymentPageState extends State<PaymentPage> {
                         _provider = provider;
                       });
                     },
-              selectedColor: const Color(0xFFEAE8FF),
-              labelStyle: TextStyle(
+              selectedColor: AppColors.primaryPale,
+              backgroundColor: AppColors.surface,
+              side: BorderSide(
                 color: selected
                     ? AppColors.primary
+                    : AppColors.border,
+              ),
+              labelStyle: TextStyle(
+                color: selected
+                    ? AppColors.text
                     : AppColors.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
@@ -589,6 +678,10 @@ class _PaymentPageState extends State<PaymentPage> {
       ],
     );
   }
+
+  // ============================================================
+  // PAYMENT INSTRUCTIONS
+  // ============================================================
 
   Widget _paymentInstructions() {
     final payment = _payment!;
@@ -614,10 +707,10 @@ class _PaymentPageState extends State<PaymentPage> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFEAEAF3),
+          color: AppColors.border,
         ),
       ),
       child: Column(
@@ -627,7 +720,7 @@ class _PaymentPageState extends State<PaymentPage> {
             children: [
               Icon(
                 Icons.receipt_long_outlined,
-                color: AppColors.primary,
+                color: AppColors.gold,
               ),
               SizedBox(width: 8),
               Expanded(
@@ -636,12 +729,13 @@ class _PaymentPageState extends State<PaymentPage> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: AppColors.text,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           _instructionRow('Metode', _providerLabel()),
           _instructionRow('Penyedia', _provider),
           _instructionRow(
@@ -650,11 +744,38 @@ class _PaymentPageState extends State<PaymentPage> {
           ),
           _instructionRow('Referensi', transactionId),
           _instructionRow('Status', status.toUpperCase()),
-          const SizedBox(height: 12),
-          const Text(
-            'Ini hanya simulasi. Tidak ada uang yang benar-benar '
-            'ditransfer melalui aplikasi ini.',
-            style: TextStyle(height: 1.5),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.gold.withValues(alpha: 0.2),
+              ),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: AppColors.gold,
+                  size: 19,
+                ),
+                SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'Ini hanya simulasi. Tidak ada uang yang benar-benar '
+                    'ditransfer melalui aplikasi ini.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      height: 1.5,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 18),
           SizedBox(
@@ -668,11 +789,14 @@ class _PaymentPageState extends State<PaymentPage> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                        color: Colors.white,
+                        color: AppColors.gold,
                         strokeWidth: 2,
                       ),
                     )
-                  : const Icon(Icons.verified_outlined),
+                  : const Icon(
+                      Icons.verified_outlined,
+                      color: AppColors.gold,
+                    ),
               label: Text(
                 _confirming
                     ? 'Mengonfirmasi...'
@@ -687,7 +811,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
   Widget _instructionRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -696,7 +820,7 @@ class _PaymentPageState extends State<PaymentPage> {
             child: Text(
               label,
               style: const TextStyle(
-                color: AppColors.textSecondary,
+                color: AppColors.textMuted,
               ),
             ),
           ),
@@ -705,6 +829,7 @@ class _PaymentPageState extends State<PaymentPage> {
             child: Text(
               value,
               style: const TextStyle(
+                color: AppColors.text,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -714,37 +839,34 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
+  // ============================================================
+  // EXPIRED PANEL
+  // ============================================================
+
   Widget _expiredPanel() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFFF2D8D8),
+          color: AppColors.error.withValues(alpha: 0.35),
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D202040),
-            blurRadius: 22,
-            offset: Offset(0, 8),
-          ),
-        ],
       ),
       child: Column(
         children: [
           Container(
             width: 88,
             height: 88,
-            decoration: const BoxDecoration(
-              color: Color(0xFFFFEEEE),
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.timer_off_rounded,
               size: 46,
-              color: Color(0xFFD94848),
+              color: AppColors.error,
             ),
           ),
           const SizedBox(height: 20),
@@ -754,6 +876,7 @@ class _PaymentPageState extends State<PaymentPage> {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
+              color: AppColors.text,
             ),
           ),
           const SizedBox(height: 10),
@@ -768,20 +891,23 @@ class _PaymentPageState extends State<PaymentPage> {
               fontSize: 14,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF8E8),
+              color: AppColors.gold.withValues(alpha: 0.09),
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.gold.withValues(alpha: 0.2),
+              ),
             ),
             child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   Icons.info_outline_rounded,
-                  color: Color(0xFF9A6A00),
+                  color: AppColors.gold,
                 ),
                 SizedBox(width: 10),
                 Expanded(
@@ -790,7 +916,7 @@ class _PaymentPageState extends State<PaymentPage> {
                     'lalu buat pesanan baru.',
                     style: TextStyle(
                       height: 1.4,
-                      color: Color(0xFF795600),
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ),
@@ -804,6 +930,7 @@ class _PaymentPageState extends State<PaymentPage> {
               onPressed: () => Navigator.of(context).pop(),
               icon: const Icon(
                 Icons.confirmation_num_outlined,
+                color: AppColors.gold,
               ),
               label: const Text('Kembali dan Pesan Ulang'),
               style: FilledButton.styleFrom(
@@ -835,6 +962,10 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     final total = _value(
@@ -848,43 +979,76 @@ class _PaymentPageState extends State<PaymentPage> {
     );
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Pembayaran'),
+        title: const Text(
+          'Pembayaran',
+          style: TextStyle(
+            color: AppColors.text,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.text,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(
+            height: 1,
+            thickness: 1,
+            color: AppColors.border,
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          // TOTAL PAYMENT HEADER
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [
                   AppColors.primary,
-                  AppColors.primaryLight,
+                  Color(0xFF7D292F),
+                  AppColors.surface,
                 ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: AppColors.primaryLight.withValues(alpha: 0.3),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.13),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(
                   Icons.receipt_long_rounded,
-                  color: Colors.white,
+                  color: AppColors.gold,
                   size: 34,
                 ),
                 const SizedBox(height: 18),
                 const Text(
                   'Total pembayaran',
                   style: TextStyle(
-                    color: Colors.white70,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   _formatCurrency(total),
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.text,
                     fontSize: 27,
                     fontWeight: FontWeight.bold,
                   ),
@@ -893,13 +1057,16 @@ class _PaymentPageState extends State<PaymentPage> {
                 Text(
                   'Pesanan #${_value(['id', 'order_id'])}',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
             ),
           ),
+
           const SizedBox(height: 18),
+
+          // COUNTDOWN
           if (!_expired)
             Container(
               padding: const EdgeInsets.symmetric(
@@ -908,13 +1075,13 @@ class _PaymentPageState extends State<PaymentPage> {
               ),
               decoration: BoxDecoration(
                 color: _remaining.inSeconds <= 10
-                    ? const Color(0xFFFFF0F0)
-                    : const Color(0xFFF2F0FF),
+                    ? AppColors.error.withValues(alpha: 0.1)
+                    : AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: _remaining.inSeconds <= 10
-                      ? const Color(0xFFF4CACA)
-                      : const Color(0xFFE2DEFF),
+                      ? AppColors.error.withValues(alpha: 0.4)
+                      : AppColors.border,
                 ),
               ),
               child: Row(
@@ -922,8 +1089,8 @@ class _PaymentPageState extends State<PaymentPage> {
                   Icon(
                     Icons.timer_outlined,
                     color: _remaining.inSeconds <= 10
-                        ? const Color(0xFFD94848)
-                        : AppColors.primary,
+                        ? AppColors.error
+                        : AppColors.gold,
                     size: 26,
                   ),
                   const SizedBox(width: 12),
@@ -934,6 +1101,7 @@ class _PaymentPageState extends State<PaymentPage> {
                         Text(
                           'Selesaikan pembayaran sebelum',
                           style: TextStyle(
+                            color: AppColors.text,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -942,7 +1110,7 @@ class _PaymentPageState extends State<PaymentPage> {
                           'Jika habis, kamu perlu memesan ulang.',
                           style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ],
@@ -957,14 +1125,16 @@ class _PaymentPageState extends State<PaymentPage> {
                         FontFeature.tabularFigures(),
                       ],
                       color: _remaining.inSeconds <= 10
-                          ? const Color(0xFFD94848)
-                          : AppColors.primary,
+                          ? AppColors.error
+                          : AppColors.gold,
                     ),
                   ),
                 ],
               ),
             ),
+
           const SizedBox(height: 24),
+
           if (_expired) ...[
             _expiredPanel(),
           ] else if (_payment == null) ...[
@@ -973,61 +1143,95 @@ class _PaymentPageState extends State<PaymentPage> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: AppColors.text,
               ),
             ),
             const SizedBox(height: 12),
+
             _methodTile(
               value: 'transfer_bank',
               title: 'Transfer Bank',
               subtitle: 'BCA, BRI, Mandiri, BNI, atau BSI',
               icon: Icons.account_balance_rounded,
             ),
+
             const SizedBox(height: 10),
+
             _methodTile(
               value: 'e_wallet',
               title: 'E-Wallet',
               subtitle: 'DANA, OVO, GoPay, atau ShopeePay',
               icon: Icons.account_balance_wallet_outlined,
             ),
+
             const SizedBox(height: 10),
+
             _methodTile(
               value: 'qris',
               title: 'QRIS',
               subtitle: 'Simulasi pembayaran QR',
               icon: Icons.qr_code_2_rounded,
             ),
+
             const SizedBox(height: 22),
+
             _providerSelector(),
+
             const SizedBox(height: 24),
+
             if (_paymentError != null) ...[
-              Text(
-                _paymentError!,
-                style: const TextStyle(
-                  color: Colors.red,
+              Container(
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  _paymentError!,
+                  style: const TextStyle(
+                    color: AppColors.error,
+                    height: 1.4,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
             ],
+
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.text,
+                  minimumSize: const Size.fromHeight(54),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
                 onPressed: _loading ? null : _submitPayment,
                 icon: _loading
                     ? const SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
+                          color: AppColors.gold,
                           strokeWidth: 2,
                         ),
                       )
                     : const Icon(
                         Icons.lock_outline_rounded,
+                        color: AppColors.gold,
                       ),
                 label: Text(
                   _loading
                       ? 'Memproses...'
                       : 'Buat Pembayaran',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),

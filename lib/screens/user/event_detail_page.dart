@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/app_colors.dart';
 import 'booking_page.dart';
 
 class EventDetailPage extends StatefulWidget {
@@ -16,11 +17,6 @@ class EventDetailPage extends StatefulWidget {
 }
 
 class _EventDetailPageState extends State<EventDetailPage> {
-  static const Color primary = Color(0xFF5B50E8);
-  static const Color background = Color(0xFFF7F7FC);
-  static const Color dark = Color(0xFF282738);
-  static const Color muted = Color(0xFF77778A);
-
   static const Duration _wibOffset = Duration(hours: 7);
 
   Map<String, dynamic> get event => widget.event;
@@ -230,6 +226,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       ),
     );
   }
+
   // ============================================================
   // BUILD
   // ============================================================
@@ -262,74 +259,114 @@ class _EventDetailPageState extends State<EventDetailPage> {
     );
 
     return Scaffold(
-      backgroundColor: background,
+      backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
             expandedHeight: 270,
-            backgroundColor: primary,
-            foregroundColor: Colors.white,
+            backgroundColor: AppColors.surface,
+            foregroundColor: AppColors.text,
             surfaceTintColor: Colors.transparent,
             flexibleSpace: FlexibleSpaceBar(
-              background: image.isEmpty
-                  ? Container(
-                      color: const Color(0xFFEAE8FF),
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (image.isEmpty)
+                    Container(
+                      color: AppColors.surface,
                       child: const Center(
                         child: Icon(
                           Icons.confirmation_number_outlined,
                           size: 76,
-                          color: primary,
+                          color: AppColors.gold,
                         ),
                       ),
                     )
-                  : Image.network(
+                  else
+                    Image.network(
                       image,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
-                          color: const Color(0xFFEAE8FF),
+                          color: AppColors.surface,
                           child: const Center(
                             child: Icon(
                               Icons.image_outlined,
                               size: 70,
-                              color: primary,
+                              color: AppColors.gold,
                             ),
                           ),
                         );
                       },
                     ),
+
+                  // Overlay agar gambar menyatu dengan tema Hikari.
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0x220B0A14),
+                          Color(0x000B0A14),
+                          Color(0xCC0B0A14),
+                        ],
+                        stops: [0.0, 0.45, 1.0],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
 
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 30),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                Text(
-                  category,
-                  style: const TextStyle(
-                    color: primary,
-                    fontWeight: FontWeight.w600,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.13),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Text(
+                    category,
+                    style: const TextStyle(
+                      color: AppColors.primaryLight,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
+
+                const SizedBox(height: 13),
 
                 Text(
                   title,
                   style: const TextStyle(
                     fontSize: 25,
+                    height: 1.25,
                     fontWeight: FontWeight.bold,
-                    color: dark,
+                    color: AppColors.text,
                   ),
                 ),
-                const SizedBox(height: 22),
+
+                const SizedBox(height: 24),
 
                 _InfoRow(
                   icon: Icons.location_on_outlined,
                   label: 'Lokasi',
                   value: location,
                 ),
+
                 const SizedBox(height: 16),
 
                 _InfoRow(
@@ -347,23 +384,42 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   ),
                 ],
 
-                const SizedBox(height: 26),
+                const SizedBox(height: 28),
 
-                const Text(
-                  'Tentang event',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: dark,
-                  ),
+                Container(
+                  height: 1,
+                  color: AppColors.border,
                 ),
-                const SizedBox(height: 10),
+
+                const SizedBox(height: 24),
+
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      color: AppColors.gold,
+                      size: 20,
+                    ),
+                    SizedBox(width: 9),
+                    Text(
+                      'Tentang event',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.text,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
 
                 Text(
                   description,
                   style: const TextStyle(
-                    height: 1.6,
-                    color: muted,
+                    height: 1.7,
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
                   ),
                 ),
               ]),
@@ -375,28 +431,43 @@ class _EventDetailPageState extends State<EventDetailPage> {
       // Tombol hanya mengarahkan pengguna ke halaman Booking.
       bottomNavigationBar: SafeArea(
         child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: const Border(
               top: BorderSide(
-                color: Color(0xFFEAEAF3),
+                color: AppColors.border,
               ),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 14,
+                offset: const Offset(0, -4),
+              ),
+            ],
           ),
           child: SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: primary,
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.text,
                 padding: const EdgeInsets.symmetric(vertical: 16),
+                elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(
+                    color: AppColors.primaryLight,
+                    width: 0.5,
+                  ),
                 ),
               ),
               onPressed: _openBooking,
-              icon: const Icon(Icons.confirmation_number_outlined),
+              icon: const Icon(
+                Icons.confirmation_number_outlined,
+                color: AppColors.gold,
+              ),
               label: const Text(
                 'Beli Tiket Sekarang',
                 style: TextStyle(
@@ -436,12 +507,15 @@ class _InfoRow extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFFEAE8FF),
+            color: AppColors.primary.withValues(alpha: 0.13),
             borderRadius: BorderRadius.circular(13),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.2),
+            ),
           ),
           child: Icon(
             icon,
-            color: const Color(0xFF5B50E8),
+            color: AppColors.gold,
           ),
         ),
         const SizedBox(width: 12),
@@ -453,15 +527,16 @@ class _InfoRow extends StatelessWidget {
                 label,
                 style: const TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF77778A),
+                  color: AppColors.textMuted,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               Text(
                 value,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF282738),
+                  color: AppColors.text,
+                  height: 1.4,
                 ),
               ),
             ],
@@ -487,54 +562,61 @@ class _InstagramInfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(13),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFCE8F1),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.camera_alt_outlined,
-              color: Color(0xFFE1306C),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Instagram',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF77778A),
-                  ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(13),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.sakura.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: AppColors.sakura.withValues(alpha: 0.2),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '@$username',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFE1306C),
-                    decoration: TextDecoration.underline,
-                  ),
-                ),
-              ],
+              ),
+              child: const Icon(
+                Icons.camera_alt_outlined,
+                color: AppColors.sakura,
+              ),
             ),
-          ),
-          const Icon(
-            Icons.open_in_new,
-            size: 18,
-            color: Color(0xFF77778A),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Instagram',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '@$username',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.sakura,
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppColors.sakura,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.open_in_new,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
+          ],
+        ),
       ),
     );
   }
