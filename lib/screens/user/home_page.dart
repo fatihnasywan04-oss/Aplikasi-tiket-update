@@ -212,15 +212,17 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          // LOGO HIKARI
+          Row(
             children: [
-              Icon(
-                Icons.confirmation_number_rounded,
-                color: Colors.white,
-                size: 30,
+              Image.asset(
+                'assets/images/app_logo.png',
+                width: 40,
+                height: 40,
+                fit: BoxFit.contain,
               ),
-              SizedBox(width: 10),
-              Text(
+              const SizedBox(width: 10),
+              const Text(
                 'Hikari',
                 style: TextStyle(
                   color: Colors.white,
@@ -230,7 +232,9 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
+
           const SizedBox(height: 24),
+
           const Text(
             'Temukan pengalaman seru berikutnya!',
             style: TextStyle(
@@ -240,7 +244,9 @@ class _HomePageState extends State<HomePage> {
               fontWeight: FontWeight.bold,
             ),
           ),
+
           const SizedBox(height: 8),
+
           const Text(
             'Cari event, pesan tiket, dan siapkan pengalaman terbaikmu.',
             style: TextStyle(
@@ -248,13 +254,17 @@ class _HomePageState extends State<HomePage> {
               height: 1.5,
             ),
           ),
+
           const SizedBox(height: 20),
+
           AppSearchBar(
             controller: _search,
             hintText: 'Cari event favoritmu...',
             onChanged: (_) {},
           ),
+
           const SizedBox(height: 10),
+
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -286,8 +296,7 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
