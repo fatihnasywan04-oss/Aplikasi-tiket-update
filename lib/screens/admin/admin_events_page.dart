@@ -669,6 +669,7 @@ class _TicketClassInput {
     stockController.dispose();
   }
 }
+
 // ============================================================
 // FORM EVENT DAN KELAS TIKET
 // ============================================================
@@ -706,6 +707,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
+
+  // Controller untuk username Instagram event.
+  late final TextEditingController _instagramController;
+
   late final TextEditingController _imageController;
   late final TextEditingController _stockController;
 
@@ -810,6 +815,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     _locationController = TextEditingController(
       text: _read(event, ['location', 'venue', 'lokasi']),
+    );
+
+    // Saat edit, isi username Instagram dari data event.
+    _instagramController = TextEditingController(
+      text: _read(event, ['instagram_username']),
     );
 
     _imageController = TextEditingController(
@@ -1130,6 +1140,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _instagramController.dispose();
     _imageController.dispose();
     _stockController.dispose();
 
@@ -1139,8 +1150,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     super.dispose();
   }
-
-  Future<void> _pickStartDate() async {
+    Future<void> _pickStartDate() async {
     final now = _nowWib();
     final today = DateTime(now.year, now.month, now.day);
 
@@ -1227,6 +1237,29 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   String? _requiredValidator(String? value, String label) {
     if (value == null || value.trim().isEmpty) {
       return '$label wajib diisi.';
+    }
+
+    return null;
+  }
+
+  // Validasi username Instagram.
+  // Username tidak boleh mengandung spasi atau karakter selain
+  // huruf, angka, titik, dan underscore.
+  String? _instagramValidator(String? value) {
+    final username = (value ?? '').trim().replaceFirst(
+      RegExp(r'^@'),
+      '',
+    );
+
+    // Username Instagram bersifat opsional.
+    if (username.isEmpty) return null;
+
+    if (username.length > 30) {
+      return 'Username Instagram maksimal 30 karakter.';
+    }
+
+    if (!RegExp(r'^[a-zA-Z0-9._]+$').hasMatch(username)) {
+      return 'Username hanya boleh berisi huruf, angka, titik, dan underscore.';
     }
 
     return null;
@@ -1427,12 +1460,21 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         );
       }
 
+      // Hilangkan @ di awal username sebelum dikirim ke backend.
+      final instagramUsername = _instagramController.text
+          .trim()
+          .replaceFirst(RegExp(r'^@'), '');
+
       final payload = <String, dynamic>{
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'location': _locationController.text.trim(),
         'category': _selectedCategory,
         'image_url': imageUrl,
+
+        // Username Instagram event.
+        'instagram_username':
+            instagramUsername.isEmpty ? null : instagramUsername,
 
         // Kirim tanggal dan jam menggunakan WIB secara eksplisit.
         'event_date': _formatWibDateTime(chosenDateTime),
@@ -1770,6 +1812,15 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   validator: (value) =>
                       _requiredValidator(value, 'Lokasi'),
                 ),
+
+                // Input username Instagram event.
+                _field(
+                  label: 'Username Instagram (opsional)',
+                  controller: _instagramController,
+                  hint: '@username',
+                  validator: _instagramValidator,
+                ),
+
                 _buildPosterPicker(),
                 if (!_isEditing) ...[
                   _buildPriceRangeCard(),

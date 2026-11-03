@@ -549,10 +549,52 @@ class ApiService {
 
     return user;
   }
-
   // ============================================================
   // EVENTS DAN UPLOAD POSTER
   // ============================================================
+
+  /// Normalisasi dan validasi username Instagram.
+  ///
+  /// Contoh:
+  /// @nama.toko -> nama.toko
+  /// nama_toko  -> nama_toko
+  ///
+  /// Nilai kosong akan dikirim sebagai null.
+  static String? _normalizeInstagramUsername(dynamic value) {
+    if (value == null) return null;
+
+    var username = value.toString().trim();
+
+    if (username.isEmpty) return null;
+
+    username = username.replaceFirst(RegExp(r'^@'), '');
+
+    if (username.isEmpty) return null;
+
+    if (username.length > 30 ||
+        !RegExp(r'^[a-zA-Z0-9._]+$').hasMatch(username)) {
+      throw Exception(
+        'Username Instagram tidak valid. Gunakan huruf, angka, '
+        'titik, atau garis bawah dengan maksimal 30 karakter.',
+      );
+    }
+
+    return username;
+  }
+
+  /// Menyiapkan payload event agar field Instagram konsisten.
+  static Map<String, dynamic> _normalizeEventPayload(
+    Map<String, dynamic> data,
+  ) {
+    final payload = Map<String, dynamic>.from(data);
+
+    payload['instagram_username'] =
+        _normalizeInstagramUsername(
+      payload['instagram_username'],
+    );
+
+    return payload;
+  }
 
   /// Upload poster dengan multipart/form-data.
   ///
@@ -713,11 +755,13 @@ class ApiService {
   static Future<Map<String, dynamic>> createEvent(
     Map<String, dynamic> data,
   ) async {
+    final payload = _normalizeEventPayload(data);
+
     return _unwrapMap(
       await _post(
         '/events/',
         headers: await _adminHeaders(),
-        body: data,
+        body: payload,
       ),
     );
   }
@@ -730,11 +774,13 @@ class ApiService {
       throw Exception('ID event tidak valid.');
     }
 
+    final payload = _normalizeEventPayload(data);
+
     return _unwrapMap(
       await _put(
         '/events/$eventId',
         headers: await _adminHeaders(),
-        body: data,
+        body: payload,
       ),
     );
   }
