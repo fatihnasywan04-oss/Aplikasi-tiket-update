@@ -1021,13 +1021,6 @@ class _PaymentPageState extends State<PaymentPage> {
                 fontSize: 12,
               ),
             ),
-            if (serverQr.isNotEmpty || _qrPayload != null) ...[
-              const SizedBox(height: 12),
-              _paymentCodeBox(
-                value: qrToShow,
-                label: 'Kode QR',
-              ),
-            ],
           ] else ...[
             const Text(
               'Kode Pembayaran E-Wallet',
