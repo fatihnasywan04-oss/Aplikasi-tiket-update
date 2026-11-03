@@ -76,22 +76,24 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
   }
 
   bool _isPaid(Map<String, dynamic> order) {
-    final status = (order['status'] ??
-            order['order_status'] ??
-            order['payment_status'] ??
-            '')
-        .toString()
-        .trim()
-        .toLowerCase();
+    final statuses = [
+      order['status'],
+      order['order_status'],
+      order['payment_status'],
+    ];
 
-    return {
-      'paid',
-      'success',
-      'successful',
-      'completed',
-      'completed_payment',
-      'lunas',
-    }.contains(status);
+    return statuses.any((value) {
+      final status = value?.toString().trim().toLowerCase();
+
+      return {
+        'paid',
+        'success',
+        'successful',
+        'completed',
+        'completed_payment',
+        'lunas',
+      }.contains(status);
+    });
   }
 
   num _orderTotal(Map<String, dynamic> order) {
@@ -142,12 +144,16 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
           return orderEventId == eventId && _isPaid(order);
         }).toList();
 
+        // Total penjualan khusus event ini.
         final totalSales = eventOrders.fold<num>(
           0,
           (total, order) => total + _orderTotal(order),
         );
 
+        // Potongan platform 5% khusus event ini.
         final platformFee = totalSales * _feePercentage;
+
+        // Pendapatan bersih khusus event ini.
         final netIncome = totalSales - platformFee;
 
         reports.add({
@@ -185,19 +191,10 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     }
   }
 
+  // Total penjualan seluruh event yang selesai.
   num get _totalSales => _reports.fold<num>(
         0,
         (total, item) => total + (item['total_sales'] as num),
-      );
-
-  num get _totalFee => _reports.fold<num>(
-        0,
-        (total, item) => total + (item['platform_fee'] as num),
-      );
-
-  num get _totalNetIncome => _reports.fold<num>(
-        0,
-        (total, item) => total + (item['net_income'] as num),
       );
 
   @override
@@ -256,8 +253,8 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                       ),
                       const SizedBox(height: 5),
                       const Text(
-                        'Laporan penjualan dan potongan platform '
-                        'untuk event yang telah berakhir.',
+                        'Potongan platform sebesar 5% dihitung '
+                        'secara terpisah untuk setiap event.',
                         style: TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 12,
@@ -275,6 +272,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     );
   }
 
+  // Ringkasan tidak lagi menampilkan total potongan gabungan.
   Widget _buildSummary() {
     return Container(
       padding: const EdgeInsets.all(19),
@@ -311,34 +309,8 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
           ),
           const SizedBox(height: 13),
           _summaryRow(
-            'Total penjualan',
+            'Total penjualan seluruh event',
             _formatCurrency(_totalSales),
-          ),
-          const SizedBox(height: 13),
-          _summaryRow(
-            'Potongan platform (5%)',
-            _formatCurrency(_totalFee),
-            valueColor: AppColors.gold,
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 15),
-            child: Divider(color: AppColors.border, height: 1),
-          ),
-          const Text(
-            'Total setelah potongan',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            _formatCurrency(_totalNetIncome),
-            style: const TextStyle(
-              color: AppColors.success,
-              fontSize: 23,
-              fontWeight: FontWeight.bold,
-            ),
           ),
         ],
       ),
@@ -375,6 +347,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     );
   }
 
+  // Setiap kartu menghitung dan menampilkan potongan event masing-masing.
   Widget _buildReportCard(Map<String, dynamic> report) {
     final endDate = report['end_date'] as DateTime;
 
@@ -452,12 +425,12 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
           ),
           const SizedBox(height: 11),
           _summaryRow(
-            'Total penjualan',
+            'Total penjualan event',
             _formatCurrency(totalSales),
           ),
           const SizedBox(height: 11),
           _summaryRow(
-            'Potongan 5%',
+            'Potongan platform (5%)',
             _formatCurrency(platformFee),
             valueColor: AppColors.gold,
           ),
@@ -473,7 +446,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
               children: [
                 const Expanded(
                   child: Text(
-                    'Pendapatan setelah potongan',
+                    'Pendapatan bersih event (95%)',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 11,
