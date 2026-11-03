@@ -50,8 +50,6 @@ class _ExplorePageState extends State<ExplorePage> {
     super.dispose();
   }
 
-  // MEMUAT EVENT DARI BACKEND
-
   Future<void> _loadEvents() async {
     if (mounted) {
       setState(() {
@@ -79,8 +77,6 @@ class _ExplorePageState extends State<ExplorePage> {
     }
   }
 
-  // MEMBACA DATA EVENT
-
   String _field(
     Map<String, dynamic> event,
     List<String> keys,
@@ -99,8 +95,6 @@ class _ExplorePageState extends State<ExplorePage> {
   String _normalizeCategory(String value) {
     return value.trim().toLowerCase();
   }
-
-  // KATEGORI DINAMIS DARI BACKEND
 
   List<String> get _categories {
     final categories = <String>[
@@ -129,8 +123,6 @@ class _ExplorePageState extends State<ExplorePage> {
 
     return categories;
   }
-
-  // FILTER EVENT
 
   List<Map<String, dynamic>> _filteredEvents() {
     final query = _search.text.trim().toLowerCase();
@@ -163,8 +155,6 @@ class _ExplorePageState extends State<ExplorePage> {
     }).toList();
   }
 
-  // WIDGET KATEGORI
-
   Widget _buildCategories() {
     final categories = _categories;
 
@@ -177,6 +167,7 @@ class _ExplorePageState extends State<ExplorePage> {
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final item = categories[index];
+
           final selected = _normalizeCategory(_category) ==
               _normalizeCategory(item);
 
@@ -218,8 +209,6 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  // TAMPILAN KETIKA EVENT KOSONG
-
   Widget _buildEmptyState() {
     return const Center(
       child: Padding(
@@ -255,8 +244,6 @@ class _ExplorePageState extends State<ExplorePage> {
       ),
     );
   }
-
-  // TAMPILAN KETIKA GAGAL MEMUAT EVENT
 
   Widget _buildErrorState() {
     return Center(
@@ -298,9 +285,9 @@ class _ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  // TAMPILAN GRID EVENT
-
-  Widget _buildEventGrid(List<Map<String, dynamic>> filtered) {
+  Widget _buildEventGrid(
+    List<Map<String, dynamic>> filtered,
+  ) {
     if (filtered.isEmpty) {
       return _buildEmptyState();
     }
@@ -314,15 +301,18 @@ class _ExplorePageState extends State<ExplorePage> {
           20,
           8,
           20,
-          20,
+          24,
         ),
         itemCount: filtered.length,
         gridDelegate:
             const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.61,
+          mainAxisSpacing: 14,
+
+          // Memberikan ruang vertikal lebih besar
+          // agar seluruh informasi kartu terlihat.
+          childAspectRatio: 0.46,
         ),
         itemBuilder: (context, index) {
           final event = filtered[index];
@@ -344,8 +334,6 @@ class _ExplorePageState extends State<ExplorePage> {
       ),
     );
   }
-
-  // BUILD
 
   @override
   Widget build(BuildContext context) {
@@ -437,12 +425,12 @@ class _ExplorePageState extends State<ExplorePage> {
             ),
           ),
 
-          // CATEGORY FILTER
+          // FILTER KATEGORI
           _buildCategories(),
 
           const SizedBox(height: 12),
 
-          // EVENT LIST
+          // DAFTAR EVENT
           Expanded(
             child: _loading
                 ? const Center(

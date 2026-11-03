@@ -23,36 +23,24 @@ class EventCard extends StatelessWidget {
         return value.toString().trim();
       }
     }
-
     return fallback;
   }
 
   DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
     if (value is DateTime) return value;
-
     return DateTime.tryParse(value.toString())?.toLocal();
   }
 
   String _formatDate(DateTime date) {
     const months = [
-      'Januari',
-      'Februari',
-      'Maret',
-      'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
-      'September',
-      'Oktober',
-      'November',
-      'Desember',
+      'Januari', 'Februari', 'Maret', 'April',
+      'Mei', 'Juni', 'Juli', 'Agustus',
+      'September', 'Oktober', 'November', 'Desember',
     ];
 
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '$day ${months[date.month - 1]} ${date.year}';
+    return '${date.day.toString().padLeft(2, '0')} '
+        '${months[date.month - 1]} ${date.year}';
   }
 
   String _getEventDateRange() {
@@ -64,9 +52,7 @@ class EventCard extends StatelessWidget {
       event['end_date'] ?? event['endDate'],
     );
 
-    if (startDate == null) {
-      return 'Tanggal belum tersedia';
-    }
+    if (startDate == null) return 'Tanggal belum tersedia';
 
     if (endDate == null ||
         (startDate.year == endDate.year &&
@@ -83,7 +69,6 @@ class EventCard extends StatelessWidget {
     if (value == null) return 0;
 
     var raw = value.toString().trim();
-
     if (raw.isEmpty) return 0;
 
     raw = raw.replaceAll(RegExp(r'[^0-9,.-]'), '');
@@ -111,11 +96,10 @@ class EventCard extends StatelessWidget {
     final digits = value.round().toString();
     final result = StringBuffer();
 
-    for (int i = 0; i < digits.length; i++) {
+    for (var i = 0; i < digits.length; i++) {
       if (i > 0 && (digits.length - i) % 3 == 0) {
         result.write('.');
       }
-
       result.write(digits[i]);
     }
 
@@ -146,14 +130,13 @@ class EventCard extends StatelessWidget {
         if (item is! Map) continue;
 
         final ticket = Map<String, dynamic>.from(item);
-
         final rawPrice = ticket['price'] ??
             ticket['ticket_price'] ??
             ticket['harga'];
 
-        if (rawPrice == null) continue;
-
-        prices.add(_toNumber(rawPrice));
+        if (rawPrice != null) {
+          prices.add(_toNumber(rawPrice));
+        }
       }
     }
 
@@ -200,14 +183,14 @@ class EventCard extends StatelessWidget {
       children: [
         Icon(
           icon,
-          size: 15,
+          size: 16,
           color: AppColors.gold,
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
-            maxLines: 2,
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 11,
@@ -262,6 +245,7 @@ class EventCard extends StatelessWidget {
         onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             // GAMBAR EVENT
             AspectRatio(
@@ -274,7 +258,7 @@ class EventCard extends StatelessWidget {
                       : Image.network(
                           image,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, error, stackTrace) {
+                          errorBuilder: (_, __, ___) {
                             return _imagePlaceholder();
                           },
                         ),
@@ -301,105 +285,102 @@ class EventCard extends StatelessWidget {
             ),
 
             // INFORMASI EVENT
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // KATEGORI
-                    Container(
-                      constraints: const BoxConstraints(maxWidth: 180),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryPale,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: AppColors.primary.withValues(alpha: 0.35),
-                        ),
-                      ),
-                      child: Text(
-                        category,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.gold,
-                        ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(13, 13, 13, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // KATEGORI
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryPale,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.35),
                       ),
                     ),
-
-                    const SizedBox(height: 11),
-
-                    // JUDUL EVENT
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        height: 1.35,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.text,
-                      ),
-                    ),
-
-                    const SizedBox(height: 11),
-
-                    // TANGGAL EVENT
-                    _buildInfoRow(
-                      icon: Icons.calendar_today_outlined,
-                      text: eventDate,
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // LOKASI
-                    _buildInfoRow(
-                      icon: Icons.location_on_outlined,
-                      text: location,
-                    ),
-
-                    const Spacer(),
-
-                    Container(
-                      height: 1,
-                      width: double.infinity,
-                      color: AppColors.border,
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // HARGA TIKET
-                    Text(
-                      priceRange,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.gold,
-                        fontSize: 13,
-                        height: 1.4,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    const Text(
-                      'Jangkauan harga tiket',
+                    child: Text(
+                      category,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 10,
-                        color: AppColors.textMuted,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.gold,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  const SizedBox(height: 11),
+
+                  // JUDUL EVENT
+                  Text(
+                    title,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      height: 1.3,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // TANGGAL
+                  _buildInfoRow(
+                    icon: Icons.calendar_today_outlined,
+                    text: eventDate,
+                  ),
+
+                  const SizedBox(height: 9),
+
+                  // LOKASI
+                  _buildInfoRow(
+                    icon: Icons.location_on_outlined,
+                    text: location,
+                  ),
+
+                  const SizedBox(height: 13),
+
+                  Container(
+                    height: 1,
+                    width: double.infinity,
+                    color: AppColors.border,
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // HARGA TIKET
+                  Text(
+                    priceRange,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.gold,
+                      fontSize: 12,
+                      height: 1.4,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  const Text(
+                    'Jangkauan harga tiket',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
