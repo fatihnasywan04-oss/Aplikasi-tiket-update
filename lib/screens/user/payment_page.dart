@@ -988,7 +988,7 @@ class _PaymentPageState extends State<PaymentPage> {
                         width: 220,
                         height: 220,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) {
+                        errorBuilder: (_, _, _) {
                           return const SizedBox(
                             width: 220,
                             height: 220,

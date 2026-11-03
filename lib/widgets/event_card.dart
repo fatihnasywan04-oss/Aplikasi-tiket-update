@@ -258,7 +258,7 @@ class EventCard extends StatelessWidget {
                       : Image.network(
                           image,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) {
+                          errorBuilder: (_, _, _) {
                             return _imagePlaceholder();
                           },
                         ),

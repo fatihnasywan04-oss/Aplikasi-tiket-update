@@ -12,7 +12,7 @@ import 'screens/admin/admin_dashboard_page.dart';
 import 'screens/admin/admin_events_page.dart';
 import 'screens/admin/admin_orders_page.dart';
 import 'screens/admin/admin_payments_page.dart';
-
+import 'screens/admin/admin_reports_page.dart';
 import 'screens/user/user_shell.dart';
 import 'widgets/app_error_view.dart';
 import 'video_intro_page.dart';
@@ -52,13 +52,17 @@ class EventTicketersApp extends StatelessWidget {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
 
+      // Daftar route aplikasi.
       routes: {
         '/login': (_) => const LoginPage(),
         '/home': (_) => const UserShell(),
+
+        // Admin.
         '/admin': (_) => const AdminDashboardPage(),
         '/admin/events': (_) => const AdminEventsPage(),
         '/admin/orders': (_) => const AdminOrdersPage(),
         '/admin/payments': (_) => const AdminPaymentsPage(),
+        '/admin/reports': (_) => const AdminReportsPage(),
       },
 
       // Video MP4 menjadi halaman pertama.

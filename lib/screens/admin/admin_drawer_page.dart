@@ -63,6 +63,12 @@ class AdminDrawerPage extends StatelessWidget {
               title: 'Pembayaran',
               route: '/admin/payments',
             ),
+            _item(
+              context,
+              icon: Icons.assessment_outlined,
+              title: 'Laporan',
+              route: '/admin/reports',
+            ),
 
             const Spacer(),
 
