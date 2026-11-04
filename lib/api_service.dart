@@ -15,11 +15,7 @@ class ApiService {
       'https://backend-fastapi-1.fadehost.app';
 
   static const Duration _timeout = Duration(seconds: 20);
-
-  /// Batas waktu pembayaran simulasi.
-  /// Waktu resmi tetap mengikuti expires_at dari backend.
-  static const Duration paymentExpiration =
-      Duration(seconds: 60);
+  static const Duration paymentExpiration = Duration(seconds: 60);
 
   static const String _tokenKey = 'access_token';
   static const String _userIdKey = 'user_id';
@@ -27,7 +23,7 @@ class ApiService {
   static const String _roleKey = 'role';
 
   // ============================================================
-  // HEADERS
+  // HEADERS DAN ROLE
   // ============================================================
 
   static Map<String, String> _publicHeaders() => {
@@ -50,10 +46,38 @@ class ApiService {
     };
   }
 
+  static Future<bool> isAdmin() async {
+    return (await getRole())?.trim().toLowerCase() == 'admin';
+  }
+
+  static Future<bool> isAdminEvent() async {
+    return (await getRole())?.trim().toLowerCase() == 'admin_event';
+  }
+
+  static Future<bool> isAdminOrEventAdmin() async {
+    final role = (await getRole())?.trim().toLowerCase();
+
+    return role == 'admin' || role == 'admin_event';
+  }
+
+  /// Khusus Super Admin.
   static Future<Map<String, String>> _adminHeaders() async {
     if (!await isAdmin()) {
       throw Exception(
-        'Fitur ini hanya dapat digunakan oleh admin.',
+        'Fitur ini hanya dapat digunakan oleh Super Admin.',
+      );
+    }
+
+    return _authHeaders();
+  }
+
+  /// Admin dan Admin Event.
+  /// Persetujuan dan kepemilikan tetap diperiksa backend.
+  static Future<Map<String, String>>
+      _eventManagementHeaders() async {
+    if (!await isAdminOrEventAdmin()) {
+      throw Exception(
+        'Fitur ini hanya dapat digunakan oleh Admin atau Admin Event.',
       );
     }
 
@@ -75,11 +99,8 @@ class ApiService {
       if (detail is List) {
         return detail.map((item) {
           if (item is Map) {
-            return (
-              item['msg'] ??
-              item['message'] ??
-              item
-            ).toString();
+            return (item['msg'] ?? item['message'] ?? item)
+                .toString();
           }
 
           return item.toString();
@@ -127,46 +148,36 @@ class ApiService {
           throw Exception(
             'Permintaan tidak dapat diproses. $message',
           );
-
         case 401:
           throw Exception(
             'Sesi login tidak valid atau kedaluwarsa. $message',
           );
-
         case 403:
           throw Exception('Akses ditolak. $message');
-
         case 404:
           throw Exception(
             'Endpoint atau data tidak ditemukan. $message',
           );
-
         case 409:
           throw Exception(
             'Konflik data atau stok tiket berubah. $message',
           );
-
         case 413:
           throw Exception(
             'Ukuran file terlalu besar. Pilih gambar yang lebih kecil.',
           );
-
         case 415:
           throw Exception(
-            'Format file ditolak server. Pastikan file merupakan '
-            'gambar yang valid dan endpoint upload menerima JPEG.',
+            'Format file ditolak server. Pastikan file merupakan gambar valid.',
           );
-
         case 422:
           throw Exception(
             'Data yang dikirim tidak valid. $message',
           );
-
         case 429:
           throw Exception(
             'Terlalu banyak permintaan. Coba lagi nanti.',
           );
-
         default:
           throw Exception(
             'Permintaan gagal (${response.statusCode}). $message',
@@ -212,13 +223,9 @@ class ApiService {
         'Terjadi masalah jaringan saat menghubungi server.',
       );
     } on FormatException {
-      throw Exception(
-        'Data dari server tidak dapat dibaca.',
-      );
+      throw Exception('Data dari server tidak dapat dibaca.');
     } catch (error) {
-      if (error is Exception) {
-        rethrow;
-      }
+      if (error is Exception) rethrow;
 
       if (kDebugMode) {
         debugPrint('ApiService unexpected error: $error');
@@ -304,9 +311,7 @@ class ApiService {
     dynamic current = value;
 
     for (int depth = 0; depth < 6; depth++) {
-      if (current is! Map) {
-        break;
-      }
+      if (current is! Map) break;
 
       if (current['data'] is Map) {
         current = current['data'];
@@ -319,7 +324,6 @@ class ApiService {
     return _map(current);
   }
 
-  /// Mendukung list langsung atau list di dalam wrapper API.
   static List<Map<String, dynamic>> _list(dynamic value) {
     dynamic current = value;
 
@@ -333,9 +337,7 @@ class ApiService {
             .toList();
       }
 
-      if (current is! Map) {
-        break;
-      }
+      if (current is! Map) break;
 
       dynamic next;
       bool found = false;
@@ -355,20 +357,15 @@ class ApiService {
         }
       }
 
-      if (!found) {
-        break;
-      }
+      if (!found) break;
 
       current = next;
     }
 
-    if (current == null) {
-      return [];
-    }
+    if (current == null) return [];
 
     throw Exception(
-      'Server tidak mengembalikan daftar data '
-      'dalam format yang dikenali.',
+      'Server tidak mengembalikan daftar data dalam format yang dikenali.',
     );
   }
 
@@ -392,10 +389,7 @@ class ApiService {
 
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString(
-      _tokenKey,
-      normalizedToken,
-    );
+    await prefs.setString(_tokenKey, normalizedToken);
   }
 
   static Future<String?> getToken() async {
@@ -437,10 +431,6 @@ class ApiService {
     final token = await getToken();
 
     return token != null && token.trim().isNotEmpty;
-  }
-
-  static Future<bool> isAdmin() async {
-    return (await getRole())?.trim().toLowerCase() == 'admin';
   }
 
   static Future<void> logout() async {
@@ -527,6 +517,24 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> applyAdminEvent({
+    String? reason,
+  }) async {
+    final body = <String, dynamic>{};
+
+    if (reason != null && reason.trim().isNotEmpty) {
+      body['reason'] = reason.trim();
+    }
+
+    return _unwrapMap(
+      await _post(
+        '/auth/admin-event/apply',
+        headers: await _authHeaders(),
+        body: body,
+      ),
+    );
+  }
+
   static Future<Map<String, dynamic>> getMe() async {
     final user = _unwrapMap(
       await _get(
@@ -549,17 +557,11 @@ class ApiService {
 
     return user;
   }
+
   // ============================================================
   // EVENTS DAN UPLOAD POSTER
   // ============================================================
 
-  /// Normalisasi dan validasi username Instagram.
-  ///
-  /// Contoh:
-  /// @nama.toko -> nama.toko
-  /// nama_toko  -> nama_toko
-  ///
-  /// Nilai kosong akan dikirim sebagai null.
   static String? _normalizeInstagramUsername(dynamic value) {
     if (value == null) return null;
 
@@ -567,7 +569,10 @@ class ApiService {
 
     if (username.isEmpty) return null;
 
-    username = username.replaceFirst(RegExp(r'^@'), '');
+    username = username.replaceFirst(
+      RegExp(r'^@'),
+      '',
+    );
 
     if (username.isEmpty) return null;
 
@@ -582,7 +587,6 @@ class ApiService {
     return username;
   }
 
-  /// Menyiapkan payload event agar field Instagram konsisten.
   static Map<String, dynamic> _normalizeEventPayload(
     Map<String, dynamic> data,
   ) {
@@ -596,17 +600,9 @@ class ApiService {
     return payload;
   }
 
-  /// Upload poster dengan multipart/form-data.
-  ///
-  /// Endpoint:
-  /// POST /events/upload-image
-  ///
-  /// Field:
-  /// file
-  ///
-  /// Gambar yang didukung oleh package:image akan dikonversi
-  /// ke JPEG agar sesuai dengan backend yang menerima JPEG.
-  static Future<String> uploadEventImage(File imageFile) async {
+  static Future<String> uploadEventImage(
+    File imageFile,
+  ) async {
     if (!await imageFile.exists()) {
       throw Exception('File poster tidak ditemukan.');
     }
@@ -622,34 +618,31 @@ class ApiService {
 
       if (originalBytes.length > maxImageSize) {
         throw Exception(
-          'Ukuran poster maksimal 15 MB. '
-          'Pilih gambar yang lebih kecil.',
+          'Ukuran poster maksimal 15 MB. Pilih gambar yang lebih kecil.',
         );
       }
 
-      // Deteksi dan dekode berdasarkan isi file.
       final decodedImage = img.decodeImage(originalBytes);
 
       if (decodedImage == null) {
         throw Exception(
-          'File tidak dapat dibaca sebagai gambar. '
-          'Format ini mungkin belum didukung.',
+          'File tidak dapat dibaca sebagai gambar.',
         );
       }
 
-      // Konversi gambar ke JPEG.
       final jpegBytes = img.encodeJpg(
         decodedImage,
         quality: 90,
       );
 
       if (jpegBytes.isEmpty) {
-        throw Exception('Gambar gagal dikonversi ke JPEG.');
+        throw Exception(
+          'Gambar gagal dikonversi ke JPEG.',
+        );
       }
 
-      final headers = await _adminHeaders();
+      final headers = await _eventManagementHeaders();
 
-      // Jangan mengirim Content-Type JSON pada multipart request.
       headers.remove('Content-Type');
       headers.remove('content-type');
       headers['Accept'] = 'application/json';
@@ -670,18 +663,18 @@ class ApiService {
         ),
       );
 
-      final streamedResponse = await request.send().timeout(
-        _timeout,
-      );
+      final streamedResponse =
+          await request.send().timeout(_timeout);
 
-      final response = await http.Response.fromStream(
-        streamedResponse,
-      ).timeout(_timeout);
+      final response =
+          await http.Response.fromStream(streamedResponse)
+              .timeout(_timeout);
 
       final result = _decodeResponse(response);
       final data = _unwrapMap(result);
 
-      final rawImageUrl = data['image_url']?.toString().trim();
+      final rawImageUrl =
+          data['image_url']?.toString().trim();
 
       if (rawImageUrl == null || rawImageUrl.isEmpty) {
         throw Exception(
@@ -695,27 +688,27 @@ class ApiService {
         throw Exception('Format URL poster tidak valid.');
       }
 
-      // URL absolut.
       if (imageUri.hasScheme) {
         if (!{'http', 'https'}.contains(imageUri.scheme) ||
             imageUri.host.isEmpty) {
-          throw Exception('URL poster dari server tidak valid.');
+          throw Exception(
+            'URL poster dari server tidak valid.',
+          );
         }
 
         return imageUri.toString();
       }
 
-      // URL protokol-relatif.
       if (rawImageUrl.startsWith('//')) {
         return 'https:$rawImageUrl';
       }
 
-      // URL relatif, misalnya /uploads/events/poster.jpg.
-      return Uri.parse(baseUrl).resolve(rawImageUrl).toString();
+      return Uri.parse(baseUrl)
+          .resolve(rawImageUrl)
+          .toString();
     } on TimeoutException {
       throw Exception(
-        'Upload poster melewati batas waktu. '
-        'Periksa koneksi internet.',
+        'Upload poster melewati batas waktu. Periksa koneksi internet.',
       );
     } on SocketException {
       throw Exception(
@@ -760,7 +753,7 @@ class ApiService {
     return _unwrapMap(
       await _post(
         '/events/',
-        headers: await _adminHeaders(),
+        headers: await _eventManagementHeaders(),
         body: payload,
       ),
     );
@@ -779,7 +772,7 @@ class ApiService {
     return _unwrapMap(
       await _put(
         '/events/$eventId',
-        headers: await _adminHeaders(),
+        headers: await _eventManagementHeaders(),
         body: payload,
       ),
     );
@@ -792,11 +785,11 @@ class ApiService {
 
     await _delete(
       '/events/$eventId',
-      headers: await _adminHeaders(),
+      headers: await _eventManagementHeaders(),
     );
   }
 
-  /// Memerlukan endpoint POST /events/{id}/cancel di backend.
+  /// Pembatalan event hanya untuk Super Admin.
   static Future<Map<String, dynamic>> cancelEvent(
     int eventId, {
     String? reason,
@@ -841,7 +834,9 @@ class ApiService {
     }
 
     if (ticketClassId != null && ticketClassId <= 0) {
-      throw Exception('ID kelas tiket tidak valid.');
+      throw Exception(
+        'ID kelas tiket tidak valid.',
+      );
     }
   }
 
@@ -885,22 +880,28 @@ class ApiService {
       throw Exception('Nama kelas tiket wajib diisi.');
     }
 
-    if (normalizedName.length > 30) {
-      throw Exception('Nama kelas tiket maksimal 30 karakter.');
+    if (normalizedName.length > 100) {
+      throw Exception(
+        'Nama kelas tiket maksimal 100 karakter.',
+      );
     }
 
     if (price < 0) {
-      throw Exception('Harga tiket tidak boleh negatif.');
+      throw Exception(
+        'Harga tiket tidak boleh negatif.',
+      );
     }
 
     if (availableTickets < 0) {
-      throw Exception('Stok tiket tidak boleh negatif.');
+      throw Exception(
+        'Stok tiket tidak boleh negatif.',
+      );
     }
 
     return _unwrapMap(
       await _post(
         '${_ticketClassPath(eventId)}/',
-        headers: await _adminHeaders(),
+        headers: await _eventManagementHeaders(),
         body: {
           'name': normalizedName,
           'price': price,
@@ -923,11 +924,15 @@ class ApiService {
     );
 
     if (price < 0) {
-      throw Exception('Harga tiket tidak boleh negatif.');
+      throw Exception(
+        'Harga tiket tidak boleh negatif.',
+      );
     }
 
     if (availableTickets < 0) {
-      throw Exception('Stok tiket tidak boleh negatif.');
+      throw Exception(
+        'Stok tiket tidak boleh negatif.',
+      );
     }
 
     final body = <String, dynamic>{
@@ -944,8 +949,10 @@ class ApiService {
         );
       }
 
-      if (normalizedName.length > 30) {
-        throw Exception('Nama kelas tiket maksimal 30 karakter.');
+      if (normalizedName.length > 100) {
+        throw Exception(
+          'Nama kelas tiket maksimal 100 karakter.',
+        );
       }
 
       body['name'] = normalizedName;
@@ -954,7 +961,7 @@ class ApiService {
     return _unwrapMap(
       await _put(
         '${_ticketClassPath(eventId)}/$ticketClassId',
-        headers: await _adminHeaders(),
+        headers: await _eventManagementHeaders(),
         body: body,
       ),
     );
@@ -966,13 +973,17 @@ class ApiService {
     required num price,
   }) async {
     if (price < 0) {
-      throw Exception('Harga tiket tidak boleh negatif.');
+      throw Exception(
+        'Harga tiket tidak boleh negatif.',
+      );
     }
 
-    final ticketClasses = await getTicketClasses(eventId);
+    final ticketClasses =
+        await getTicketClasses(eventId);
 
     final ticketClass = ticketClasses.firstWhere(
-      (item) => _parseInt(item['id']) == ticketClassId,
+      (item) =>
+          _parseInt(item['id']) == ticketClassId,
       orElse: () => throw Exception(
         'Kelas tiket tidak ditemukan.',
       ),
@@ -1001,10 +1012,9 @@ class ApiService {
 
     await _delete(
       '${_ticketClassPath(eventId)}/$ticketClassId',
-      headers: await _adminHeaders(),
+      headers: await _eventManagementHeaders(),
     );
   }
-
   // ============================================================
   // ORDERS
   // ============================================================
@@ -1015,11 +1025,15 @@ class ApiService {
     required int quantity,
   }) async {
     if (eventId <= 0 || ticketClassId <= 0) {
-      throw Exception('Event atau kelas tiket tidak valid.');
+      throw Exception(
+        'Event atau kelas tiket tidak valid.',
+      );
     }
 
     if (quantity <= 0) {
-      throw Exception('Jumlah tiket harus lebih dari nol.');
+      throw Exception(
+        'Jumlah tiket harus lebih dari nol.',
+      );
     }
 
     return _unwrapMap(
@@ -1048,13 +1062,6 @@ class ApiService {
         '[ApiService] GET /orders/ berhasil. '
         'Jumlah pesanan: ${orders.length}',
       );
-
-      if (orders.isNotEmpty) {
-        debugPrint(
-          '[ApiService] ID pesanan pertama: '
-          '${orders.first['id'] ?? orders.first['order_id']}',
-        );
-      }
     }
 
     return orders;
@@ -1095,9 +1102,7 @@ class ApiService {
 
     final parsed = DateTime.tryParse(value.toString());
 
-    if (parsed == null) return null;
-
-    return parsed.toUtc();
+    return parsed?.toUtc();
   }
 
   // ============================================================
@@ -1119,7 +1124,8 @@ class ApiService {
       throw Exception('ID pesanan tidak valid.');
     }
 
-    final normalizedMethod = paymentMethod.trim().toLowerCase();
+    final normalizedMethod =
+        paymentMethod.trim().toLowerCase();
 
     if (!methods.contains(normalizedMethod)) {
       throw Exception(
@@ -1131,7 +1137,9 @@ class ApiService {
     final provider = paymentProvider.trim();
 
     if (provider.isEmpty) {
-      throw Exception('Silakan pilih penyedia pembayaran.');
+      throw Exception(
+        'Silakan pilih penyedia pembayaran.',
+      );
     }
 
     return _unwrapMap(
@@ -1147,8 +1155,7 @@ class ApiService {
     );
   }
 
-  /// Endpoint simulasi:
-  /// POST /payments/{payment_id}/confirm.
+  /// Konfirmasi pembayaran simulasi, bukan gateway nyata.
   static Future<Map<String, dynamic>> confirmPayment({
     required int paymentId,
   }) async {
@@ -1165,7 +1172,6 @@ class ApiService {
     );
   }
 
-  /// Endpoint backend: GET /payments/my.
   static Future<List<Map<String, dynamic>>> getMyPayments() async {
     return _list(
       await _get(
@@ -1176,9 +1182,10 @@ class ApiService {
   }
 
   // ============================================================
-  // ADMIN
+  // ADMIN / SUPER ADMIN / ADMIN EVENT
   // ============================================================
 
+  /// Dashboard khusus Super Admin.
   static Future<Map<String, dynamic>> getAdminDashboard() async {
     return _unwrapMap(
       await _get(
@@ -1188,7 +1195,45 @@ class ApiService {
     );
   }
 
-  static Future<List<Map<String, dynamic>>> getAdminOrders() async {
+  /// Dashboard Admin Event dan Super Admin.
+  /// Backend membatasi statistik Admin Event berdasarkan pemilik.
+  static Future<Map<String, dynamic>>
+      getOrganizerDashboard() async {
+    return _unwrapMap(
+      await _get(
+        '/admin/dashboard',
+        headers: await _eventManagementHeaders(),
+      ),
+    );
+  }
+
+  /// Semua pesanan milik event organizer.
+  /// Backend harus membatasi hasil berdasarkan event pemilik.
+  static Future<List<Map<String, dynamic>>>
+      getOrganizerOrders() async {
+    return _list(
+      await _get(
+        '/admin/orders',
+        headers: await _eventManagementHeaders(),
+      ),
+    );
+  }
+
+  /// Semua pembayaran milik event organizer.
+  /// Backend harus membatasi hasil berdasarkan event pemilik.
+  static Future<List<Map<String, dynamic>>>
+      getOrganizerPayments() async {
+    return _list(
+      await _get(
+        '/admin/payments',
+        headers: await _eventManagementHeaders(),
+      ),
+    );
+  }
+
+  /// Pesanan khusus Super Admin.
+  static Future<List<Map<String, dynamic>>>
+      getAdminOrders() async {
     return _list(
       await _get(
         '/orders/admin/all',
@@ -1197,11 +1242,216 @@ class ApiService {
     );
   }
 
-  static Future<List<Map<String, dynamic>>> getAdminPayments() async {
+  /// Pembayaran khusus Super Admin.
+  static Future<List<Map<String, dynamic>>>
+      getAdminPayments() async {
     return _list(
       await _get(
         '/admin/payments',
         headers: await _adminHeaders(),
+      ),
+    );
+  }
+
+  // ============================================================
+  // ADMIN EVENT APPLICATIONS
+  // ============================================================
+
+  static Future<List<Map<String, dynamic>>>
+      getAdminEventApplications() async {
+    return _list(
+      await _get(
+        '/admin/admin-event-applications',
+        headers: await _adminHeaders(),
+      ),
+    );
+  }
+
+  static Future<Map<String, dynamic>>
+      reviewAdminEventApplication({
+    required int userId,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    if (userId <= 0) {
+      throw Exception('ID pengguna tidak valid.');
+    }
+
+    final normalizedStatus =
+        status.trim().toLowerCase();
+
+    if (!{'approved', 'rejected'}.contains(normalizedStatus)) {
+      throw Exception(
+        'Status harus approved atau rejected.',
+      );
+    }
+
+    final body = <String, dynamic>{
+      'status': normalizedStatus,
+    };
+
+    if (rejectionReason != null &&
+        rejectionReason.trim().isNotEmpty) {
+      body['rejection_reason'] =
+          rejectionReason.trim();
+    }
+
+    return _unwrapMap(
+      await _post(
+        '/admin/admin-event-applications/$userId/review',
+        headers: await _adminHeaders(),
+        body: body,
+      ),
+    );
+  }
+
+  // ============================================================
+  // EVENT APPROVAL DAN REQUEST
+  // ============================================================
+
+  static Future<List<Map<String, dynamic>>>
+      getPendingEvents() async {
+    return _list(
+      await _get(
+        '/events/admin/pending',
+        headers: await _adminHeaders(),
+      ),
+    );
+  }
+
+  static Future<Map<String, dynamic>> reviewEvent({
+    required int eventId,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    if (eventId <= 0) {
+      throw Exception('ID event tidak valid.');
+    }
+
+    final normalizedStatus =
+        status.trim().toLowerCase();
+
+    if (!{'approved', 'rejected'}.contains(normalizedStatus)) {
+      throw Exception(
+        'Status harus approved atau rejected.',
+      );
+    }
+
+    final body = <String, dynamic>{
+      'status': normalizedStatus,
+    };
+
+    if (rejectionReason != null &&
+        rejectionReason.trim().isNotEmpty) {
+      body['rejection_reason'] =
+          rejectionReason.trim();
+    }
+
+    return _unwrapMap(
+      await _post(
+        '/events/$eventId/review',
+        headers: await _adminHeaders(),
+        body: body,
+      ),
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>>
+      getEventUpdateRequests() async {
+    return _list(
+      await _get(
+        '/events/admin/update-requests',
+        headers: await _adminHeaders(),
+      ),
+    );
+  }
+
+  static Future<Map<String, dynamic>>
+      reviewEventUpdateRequest({
+    required int requestId,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    if (requestId <= 0) {
+      throw Exception(
+        'ID pengajuan tidak valid.',
+      );
+    }
+
+    final normalizedStatus =
+        status.trim().toLowerCase();
+
+    if (!{'approved', 'rejected'}.contains(normalizedStatus)) {
+      throw Exception(
+        'Status harus approved atau rejected.',
+      );
+    }
+
+    final body = <String, dynamic>{
+      'status': normalizedStatus,
+    };
+
+    if (rejectionReason != null &&
+        rejectionReason.trim().isNotEmpty) {
+      body['rejection_reason'] =
+          rejectionReason.trim();
+    }
+
+    return _unwrapMap(
+      await _post(
+        '/events/admin/update-requests/$requestId/review',
+        headers: await _adminHeaders(),
+        body: body,
+      ),
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>>
+      getEventDeletionRequests() async {
+    return _list(
+      await _get(
+        '/events/admin/deletion-requests',
+        headers: await _adminHeaders(),
+      ),
+    );
+  }
+
+  static Future<Map<String, dynamic>>
+      reviewEventDeletionRequest({
+    required int requestId,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    if (requestId <= 0) {
+      throw Exception(
+        'ID pengajuan tidak valid.',
+      );
+    }
+
+    final normalizedStatus =
+        status.trim().toLowerCase();
+
+    if (!{'approved', 'rejected'}.contains(normalizedStatus)) {
+      throw Exception(
+        'Status harus approved atau rejected.',
+      );
+    }
+
+    final body = <String, dynamic>{
+      'status': normalizedStatus,
+    };
+
+    if (rejectionReason != null &&
+        rejectionReason.trim().isNotEmpty) {
+      body['rejection_reason'] =
+          rejectionReason.trim();
+    }
+
+    return _unwrapMap(
+      await _post(
+        '/events/admin/deletion-requests/$requestId/review',
+        headers: await _adminHeaders(),
+        body: body,
       ),
     );
   }

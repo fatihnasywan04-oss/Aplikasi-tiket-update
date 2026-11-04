@@ -9,23 +9,19 @@ import 'core/app_theme.dart';
 
 import 'screens/auth/login_page.dart';
 import 'screens/admin/admin_dashboard_page.dart';
-import 'screens/admin/admin_events_page.dart';
-import 'screens/admin/admin_orders_page.dart';
-import 'screens/admin/admin_payments_page.dart';
-import 'screens/admin/admin_reports_page.dart';
+import 'screens/admin_event/admin_event_dashboard_page.dart';
 import 'screens/user/user_shell.dart';
+
 import 'widgets/app_error_view.dart';
 import 'video_intro_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Fullscreen imersif.
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.immersiveSticky,
   );
 
-  // Inisialisasi format tanggal Indonesia.
   try {
     await initializeDateFormatting('id_ID', null);
   } catch (e, stackTrace) {
@@ -47,29 +43,32 @@ class EventTicketersApp extends StatelessWidget {
       title: 'Hikari',
       debugShowCheckedModeBanner: false,
 
-      // Tema utama Japanese Dark Theme Hikari.
       theme: AppTheme.dark,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
 
-      // Daftar route aplikasi.
       routes: {
         '/login': (_) => const LoginPage(),
+        '/entry': (_) => const AppEntry(),
         '/home': (_) => const UserShell(),
 
-        // Admin.
+        // Super Admin.
         '/admin': (_) => const AdminDashboardPage(),
-        '/admin/events': (_) => const AdminEventsPage(),
-        '/admin/orders': (_) => const AdminOrdersPage(),
-        '/admin/payments': (_) => const AdminPaymentsPage(),
-        '/admin/reports': (_) => const AdminReportsPage(),
+
+        // Admin Event / Organizer.
+        '/admin-event': (_) =>
+            const AdminEventDashboardPage(),
       },
 
-      // Video MP4 menjadi halaman pertama.
+      // Video pembuka tetap menjadi halaman pertama.
       home: const VideoIntroPage(),
     );
   }
 }
+
+// ============================================================
+// APP ENTRY
+// ============================================================
 
 class AppEntry extends StatefulWidget {
   const AppEntry({super.key});
@@ -95,49 +94,40 @@ class _AppEntryState extends State<AppEntry> {
         const Duration(seconds: 10),
       );
 
-      debugPrint('[AppEntry] Status login: $loggedIn');
-
       if (!loggedIn) {
         return const LoginPage();
       }
 
       debugPrint('[AppEntry] Mengambil data pengguna...');
 
+      // Ambil role terbaru dari database melalui backend.
       final user = await ApiService.getMe().timeout(
         const Duration(seconds: 20),
       );
 
-      debugPrint(
-        '[AppEntry] Data pengguna berhasil diambil.',
-      );
-
-      final role = user['role']?.toString().trim().toLowerCase();
+      final role = user['role']
+          ?.toString()
+          .trim()
+          .toLowerCase();
 
       debugPrint('[AppEntry] Role pengguna: $role');
 
-      if (role == 'admin') {
-        debugPrint(
-          '[AppEntry] Membuka AdminDashboardPage.',
-        );
-        return const AdminDashboardPage();
+      switch (role) {
+        case 'admin':
+          return const AdminDashboardPage();
+
+        case 'admin_event':
+          return const AdminEventDashboardPage();
+
+        case 'user':
+          return const UserShell();
+
+        default:
+          await ApiService.logout();
+          return const LoginPage();
       }
-
-      if (role == 'user') {
-        debugPrint('[AppEntry] Membuka UserShell.');
-        return const UserShell();
-      }
-
-      debugPrint(
-        '[AppEntry] Role tidak valid, menghapus sesi.',
-      );
-
-      await ApiService.logout().timeout(
-        const Duration(seconds: 5),
-      );
-
-      return const LoginPage();
     } on TimeoutException catch (e, stackTrace) {
-      debugPrint('[AppEntry] Proses timeout: $e');
+      debugPrint('[AppEntry] Timeout: $e');
       debugPrintStack(stackTrace: stackTrace);
 
       return AppErrorView(
@@ -151,20 +141,15 @@ class _AppEntryState extends State<AppEntry> {
 
       final message = e.toString().toLowerCase();
 
-      final invalidSession = message.contains('401') ||
+      final invalidSession =
+          message.contains('401') ||
           message.contains('unauthorized') ||
           message.contains('token') ||
           message.contains('kedaluwarsa');
 
       if (invalidSession) {
-        debugPrint(
-          '[AppEntry] Sesi tidak valid, kembali ke login.',
-        );
-
         try {
-          await ApiService.logout().timeout(
-            const Duration(seconds: 5),
-          );
+          await ApiService.logout();
         } catch (logoutError) {
           debugPrint(
             '[AppEntry] Gagal menghapus sesi: $logoutError',
@@ -196,18 +181,15 @@ class _AppEntryState extends State<AppEntry> {
       future: _page,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          // Tidak menampilkan loading tambahan.
           return const Scaffold(
             backgroundColor: AppTheme.background,
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
           );
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
-          debugPrint(
-            '[AppEntry] FutureBuilder menerima error: '
-            '${snapshot.error}',
-          );
-
           return AppErrorView(
             message:
                 'Terjadi kesalahan saat membuka aplikasi.',

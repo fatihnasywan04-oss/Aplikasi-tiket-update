@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import 'api_service.dart';
 import 'screens/auth/login_page.dart';
 import 'screens/admin/admin_dashboard_page.dart';
+import 'screens/admin_event/admin_event_dashboard_page.dart';
 import 'screens/user/user_shell.dart';
 import 'widgets/app_error_view.dart';
 
@@ -31,17 +32,14 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
   void initState() {
     super.initState();
 
-    // Aktifkan fullscreen.
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.immersiveSticky,
     );
 
-    // Siapkan video intro.
     _controller = VideoPlayerController.asset(
       'assets/videos/loading.mp4',
     );
 
-    // Tangani video yang terlalu lama dimuat.
     _initializationTimer = Timer(
       const Duration(seconds: 10),
       () {
@@ -104,7 +102,6 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
       return;
     }
 
-    // Buka aplikasi saat video selesai.
     if (value.duration > Duration.zero &&
         value.position >= value.duration &&
         !value.isPlaying) {
@@ -130,7 +127,6 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
 
     _controller.removeListener(_checkVideoCompletion);
 
-    // Hentikan video sebelum memeriksa akun.
     try {
       await _controller.pause();
     } catch (error) {
@@ -161,18 +157,29 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
 
       final role = user['role']?.toString().trim().toLowerCase();
 
-      if (role == 'admin') {
-        _navigateTo(const AdminDashboardPage());
-      } else if (role == 'user') {
-        _navigateTo(const UserShell());
-      } else {
-        await ApiService.logout().timeout(
-          const Duration(seconds: 5),
-        );
+      debugPrint('[VideoIntro] Role akun: $role');
 
-        if (!mounted || _navigated) return;
+      switch (role) {
+        case 'admin':
+          _navigateTo(const AdminDashboardPage());
+          break;
 
-        _navigateTo(const LoginPage());
+        case 'admin_event':
+          _navigateTo(const AdminEventDashboardPage());
+          break;
+
+        case 'user':
+          _navigateTo(const UserShell());
+          break;
+
+        default:
+          await ApiService.logout().timeout(
+            const Duration(seconds: 5),
+          );
+
+          if (!mounted || _navigated) return;
+
+          _navigateTo(const LoginPage());
       }
     } on TimeoutException catch (error) {
       debugPrint(
@@ -278,7 +285,6 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Video memenuhi seluruh layar.
             if (showVideo)
               SizedBox.expand(
                 child: FittedBox(
@@ -290,8 +296,6 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
                   ),
                 ),
               )
-
-            // Pesan jika video gagal diputar.
             else if (_initializationFailed)
               Center(
                 child: Padding(
@@ -332,8 +336,6 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
                   ),
                 ),
               )
-
-            // Loading hanya saat video pertama kali disiapkan.
             else
               const Center(
                 child: CircularProgressIndicator(

@@ -13,6 +13,7 @@ class AppTheme {
   static const Color sakura = Color(0xFFF5C6D1);
 
   static const Color textPrimary = Color(0xFFFFF3E8);
+  static const Color text = textPrimary;
   static const Color textSecondary = Color(0xFFD6C3C3);
   static const Color border = Color(0xFF49303A);
 
@@ -21,18 +22,19 @@ class AppTheme {
   }
 
   static ThemeData get dark {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: primary,
-      brightness: Brightness.dark,
-    ).copyWith(
-      primary: primary,
-      onPrimary: Colors.white,
-      secondary: secondary,
-      onSecondary: background,
-      surface: surface,
-      onSurface: textPrimary,
-      error: const Color(0xFFFF6B6B),
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: primary,
+          brightness: Brightness.dark,
+        ).copyWith(
+          primary: primary,
+          onPrimary: Colors.white,
+          secondary: secondary,
+          onSecondary: background,
+          surface: surface,
+          onSurface: textPrimary,
+          error: const Color(0xFFFF6B6B),
+        );
 
     return ThemeData(
       useMaterial3: true,
@@ -45,19 +47,10 @@ class AppTheme {
         bodyLarge: TextStyle(color: textPrimary),
         bodyMedium: TextStyle(color: textPrimary),
         bodySmall: TextStyle(color: textSecondary),
-        titleLarge: TextStyle(
-          color: textPrimary,
-          fontWeight: FontWeight.bold,
-        ),
-        titleMedium: TextStyle(
-          color: textPrimary,
-          fontWeight: FontWeight.w600,
-        ),
+        titleLarge: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
+        titleMedium: TextStyle(color: textPrimary, fontWeight: FontWeight.w600),
         titleSmall: TextStyle(color: textPrimary),
-        labelLarge: TextStyle(
-          color: textPrimary,
-          fontWeight: FontWeight.w600,
-        ),
+        labelLarge: TextStyle(color: textPrimary, fontWeight: FontWeight.w600),
       ),
 
       // App bar
@@ -103,10 +96,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(
-            color: primary,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -114,10 +104,7 @@ class AppTheme {
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(
-            color: Color(0xFFFF6B6B),
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: Color(0xFFFF6B6B), width: 1.5),
         ),
       ),
 
@@ -149,21 +136,14 @@ class AppTheme {
 
       // Text buttons
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: secondary,
-        ),
+        style: TextButton.styleFrom(foregroundColor: secondary),
       ),
 
       // Icons
-      iconTheme: const IconThemeData(
-        color: secondary,
-      ),
+      iconTheme: const IconThemeData(color: secondary),
 
       // Dividers
-      dividerTheme: const DividerThemeData(
-        color: border,
-        thickness: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: border, thickness: 1),
 
       // Snack bar
       snackBarTheme: SnackBarThemeData(
@@ -214,10 +194,7 @@ class AppTheme {
           fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
-        contentTextStyle: const TextStyle(
-          color: textSecondary,
-          fontSize: 14,
-        ),
+        contentTextStyle: const TextStyle(color: textSecondary, fontSize: 14),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: border),
@@ -247,9 +224,7 @@ class AppTheme {
         }),
         checkColor: WidgetStateProperty.all(Colors.white),
         side: const BorderSide(color: secondary),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
     );
   }
