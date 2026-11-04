@@ -9,9 +9,15 @@ import 'core/app_theme.dart';
 
 import 'screens/auth/login_page.dart';
 import 'screens/admin/admin_dashboard_page.dart';
+import 'screens/admin/admin_admin_event_applications_page.dart';
+import 'screens/admin/admin_payments_page.dart';
+import 'screens/admin/admin_reports_page.dart';
+import 'screens/admin/admin_orders_page.dart';
+import 'screens/admin/admin_events_page.dart';
+
 import 'screens/admin_event/admin_event_dashboard_page.dart';
 import 'screens/user/user_shell.dart';
-import 'screens/admin/admin_admin_event_applications_page.dart';
+
 import 'widgets/app_error_view.dart';
 import 'video_intro_page.dart';
 
@@ -48,18 +54,36 @@ class EventTicketersApp extends StatelessWidget {
       themeMode: ThemeMode.dark,
 
       routes: {
+        // Auth
         '/login': (_) => const LoginPage(),
         '/entry': (_) => const AppEntry(),
+
+        // User
         '/home': (_) => const UserShell(),
 
-        // Super Admin.
+        // Super Admin
         '/admin': (_) => const AdminDashboardPage(),
 
-        // Admin Event / Organizer.
-        '/admin-event': (_) =>
-            const AdminEventDashboardPage(),
         '/admin/admin-event-applications': (_) =>
             const AdminAdminEventApplicationsPage(),
+
+        '/admin/payments': (_) =>
+            const AdminPaymentsPage(),
+
+        '/admin/reports': (_) =>
+            const AdminReportsPage(),
+
+        // Admin Orders
+        '/admin/orders': (_) =>
+            const AdminOrdersPage(),
+
+        // Admin Events
+        '/admin/events': (_) =>
+            const AdminEventsPage(),
+
+        // Admin Event / Organizer
+        '/admin-event': (_) =>
+            const AdminEventDashboardPage(),
       },
 
       // Video pembuka tetap menjadi halaman pertama.
@@ -102,7 +126,6 @@ class _AppEntryState extends State<AppEntry> {
 
       debugPrint('[AppEntry] Mengambil data pengguna...');
 
-      // Ambil role terbaru dari database melalui backend.
       final user = await ApiService.getMe().timeout(
         const Duration(seconds: 20),
       );
