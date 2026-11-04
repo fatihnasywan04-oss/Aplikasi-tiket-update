@@ -11,7 +11,7 @@ import 'screens/auth/login_page.dart';
 import 'screens/admin/admin_dashboard_page.dart';
 import 'screens/admin_event/admin_event_dashboard_page.dart';
 import 'screens/user/user_shell.dart';
-
+import 'screens/admin/admin_admin_event_applications_page.dart';
 import 'widgets/app_error_view.dart';
 import 'video_intro_page.dart';
 
@@ -58,6 +58,8 @@ class EventTicketersApp extends StatelessWidget {
         // Admin Event / Organizer.
         '/admin-event': (_) =>
             const AdminEventDashboardPage(),
+        '/admin/admin-event-applications': (_) =>
+            const AdminAdminEventApplicationsPage(),
       },
 
       // Video pembuka tetap menjadi halaman pertama.

@@ -53,6 +53,12 @@ class AdminDrawerPage extends StatelessWidget {
             ),
             _item(
               context,
+              icon: Icons.verified_user_outlined,
+              title: 'Persetujuan Admin Event',
+              route: '/admin/admin-event-applications',
+            ),
+            _item(
+              context,
               icon: Icons.receipt_long_outlined,
               title: 'Pesanan',
               route: '/admin/orders',

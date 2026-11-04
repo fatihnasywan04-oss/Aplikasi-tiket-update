@@ -1015,7 +1015,7 @@ class ApiService {
       headers: await _eventManagementHeaders(),
     );
   }
-  // ============================================================
+    // ============================================================
   // ORDERS
   // ============================================================
 
@@ -1301,6 +1301,56 @@ class ApiService {
         '/admin/admin-event-applications/$userId/review',
         headers: await _adminHeaders(),
         body: body,
+      ),
+    );
+  }
+
+  // ============================================================
+  // CREATE ADMIN EVENT ACCOUNT
+  // POST /admin/admin-event-accounts
+  // ============================================================
+
+  /// Membuat akun Admin Event secara langsung.
+  /// Khusus Super Admin.
+  /// Akun langsung aktif setelah berhasil dibuat.
+  static Future<Map<String, dynamic>>
+      createAdminEventAccount({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final normalizedName = name.trim();
+    final normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedName.length < 2) {
+      throw Exception('Nama minimal 2 karakter.');
+    }
+
+    if (normalizedName.length > 100) {
+      throw Exception('Nama maksimal 100 karakter.');
+    }
+
+    if (normalizedEmail.isEmpty) {
+      throw Exception('Email wajib diisi.');
+    }
+
+    if (password.length < 8) {
+      throw Exception('Password minimal 8 karakter.');
+    }
+
+    if (password.length > 128) {
+      throw Exception('Password maksimal 128 karakter.');
+    }
+
+    return _unwrapMap(
+      await _post(
+        '/admin/admin-event-accounts',
+        headers: await _adminHeaders(),
+        body: {
+          'name': normalizedName,
+          'email': normalizedEmail,
+          'password': password,
+        },
       ),
     );
   }
