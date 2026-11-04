@@ -1,3 +1,4 @@
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../api_service.dart';
 import '../../core/app_colors.dart';
 import '../admin/admin_dashboard_page.dart';
+import '../admin_event/admin_event_dashboard_page.dart';
 import '../user/user_shell.dart';
 import 'register_page.dart';
 
@@ -44,6 +46,10 @@ class _LoginPageState extends State<LoginPage>
     super.dispose();
   }
 
+  // ============================================================
+  // LOGIN
+  // ============================================================
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -69,20 +75,34 @@ class _LoginPageState extends State<LoginPage>
         );
       }
 
-      final role = user['role']?.toString().trim().toLowerCase();
+      final role = user['role']
+          ?.toString()
+          .trim()
+          .toLowerCase();
 
       late final Widget destination;
 
-      if (role == 'admin') {
-        destination = const AdminDashboardPage();
-      } else if (role == 'user') {
-        destination = const UserShell();
-      } else {
-        await ApiService.logout();
+      switch (role) {
+        case 'admin':
+          destination = const AdminDashboardPage();
+          break;
 
-        if (!mounted) return;
+        case 'admin_event':
+          destination = const AdminEventDashboardPage();
+          break;
 
-        throw Exception('Peran akun tidak dikenali.');
+        case 'user':
+          destination = const UserShell();
+          break;
+
+        default:
+          await ApiService.logout();
+
+          if (!mounted) return;
+
+          throw Exception(
+            'Peran akun tidak dikenali: ${role ?? 'kosong'}.',
+          );
       }
 
       if (!mounted) return;
@@ -113,6 +133,10 @@ class _LoginPageState extends State<LoginPage>
     }
   }
 
+  // ============================================================
+  // VALIDASI EMAIL
+  // ============================================================
+
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
 
@@ -120,12 +144,17 @@ class _LoginPageState extends State<LoginPage>
       return 'Email wajib diisi';
     }
 
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+        .hasMatch(email)) {
       return 'Masukkan alamat email yang valid';
     }
 
     return null;
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -224,12 +253,16 @@ class _LoginPageState extends State<LoginPage>
                                 color: AppColors.surfaceDark,
                                 borderRadius: BorderRadius.circular(26),
                                 border: Border.all(
-                                  color: AppColors.gold.withValues(alpha: 0.65),
+                                  color: AppColors.gold.withValues(
+                                    alpha: 0.65,
+                                  ),
                                   width: 1.2,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.primary.withValues(alpha: 0.25),
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.25,
+                                    ),
                                     blurRadius: 22,
                                     spreadRadius: 1,
                                   ),
@@ -323,14 +356,18 @@ class _LoginPageState extends State<LoginPage>
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.email],
+                            autofillHints: const [
+                              AutofillHints.email,
+                            ],
                             validator: _validateEmail,
                             style: const TextStyle(
                               color: AppColors.text,
                             ),
                             decoration: const InputDecoration(
                               hintText: 'Email',
-                              prefixIcon: Icon(Icons.email_outlined),
+                              prefixIcon: Icon(
+                                Icons.email_outlined,
+                              ),
                             ),
                           ),
 
@@ -350,7 +387,9 @@ class _LoginPageState extends State<LoginPage>
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             textInputAction: TextInputAction.done,
-                            autofillHints: const [AutofillHints.password],
+                            autofillHints: const [
+                              AutofillHints.password,
+                            ],
                             onFieldSubmitted: (_) {
                               if (!_loading) _login();
                             },
@@ -375,7 +414,8 @@ class _LoginPageState extends State<LoginPage>
                                     : 'Sembunyikan password',
                                 onPressed: () {
                                   setState(() {
-                                    _obscurePassword = !_obscurePassword;
+                                    _obscurePassword =
+                                        !_obscurePassword;
                                   });
                                 },
                                 icon: Icon(
@@ -395,15 +435,22 @@ class _LoginPageState extends State<LoginPage>
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              minimumSize: const Size(double.infinity, 52),
+                              minimumSize: const Size(
+                                double.infinity,
+                                52,
+                              ),
                               elevation: 4,
-                              shadowColor: AppColors.primary.withValues(alpha: 0.35),
+                              shadowColor: AppColors.primary.withValues(
+                                alpha: 0.35,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(15),
                               ),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 4,
+                              ),
                               child: _loading
                                   ? const SizedBox(
                                       width: 22,
@@ -473,7 +520,10 @@ class _LoginPageState extends State<LoginPage>
   }
 }
 
+// ============================================================
 // CUSTOM PAINTER UNTUK ANIMASI KELOPAK SAKURA
+// ============================================================
+
 class SakuraPetalPainter extends CustomPainter {
   final double progress;
 
@@ -534,7 +584,9 @@ class SakuraPetalPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant SakuraPetalPainter oldDelegate) {
+  bool shouldRepaint(
+    covariant SakuraPetalPainter oldDelegate,
+  ) {
     return oldDelegate.progress != progress;
   }
 }

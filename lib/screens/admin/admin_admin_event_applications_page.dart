@@ -89,8 +89,7 @@ class _AdminAdminEventApplicationsPageState
 
                       TextFormField(
                         controller: nameController,
-                        textCapitalization:
-                            TextCapitalization.words,
+                        textCapitalization: TextCapitalization.words,
                         decoration: const InputDecoration(
                           labelText: 'Nama Admin Event',
                           prefixIcon: Icon(Icons.person_outline),
@@ -310,6 +309,8 @@ class _AdminAdminEventApplicationsPageState
 
       await _loadApplications();
     } catch (e) {
+      if (!mounted) return;
+
       _showMessage(
         e.toString().replaceFirst('Exception: ', ''),
         isError: true,
@@ -448,9 +449,7 @@ class _AdminAdminEventApplicationsPageState
 
     controller.dispose();
 
-    if (reason != null &&
-        reason.trim().isNotEmpty &&
-        mounted) {
+    if (reason != null && reason.trim().isNotEmpty && mounted) {
       await _reviewApplication(
         userId: userId,
         status: 'rejected',
@@ -472,8 +471,7 @@ class _AdminAdminEventApplicationsPageState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor:
-            isError ? Colors.red : Colors.green,
+        backgroundColor: isError ? Colors.red : Colors.green,
       ),
     );
   }
@@ -484,8 +482,7 @@ class _AdminAdminEventApplicationsPageState
 
   List<Map<String, dynamic>> get _filteredApplications {
     return _applications.where((application) {
-      return application['admin_event_status'] ==
-          _selectedStatus;
+      return application['admin_event_status'] == _selectedStatus;
     }).toList();
   }
 
@@ -537,10 +534,7 @@ class _AdminAdminEventApplicationsPageState
     );
   }
 
-  Widget _filterButton(
-    String value,
-    String label,
-  ) {
+  Widget _filterButton(String value, String label) {
     final selected = _selectedStatus == value;
 
     return ChoiceChip(
@@ -561,26 +555,19 @@ class _AdminAdminEventApplicationsPageState
   Widget _buildApplicationCard(
     Map<String, dynamic> application,
   ) {
-    final name =
-        application['name']?.toString() ?? '-';
-
-    final email =
-        application['email']?.toString() ?? '-';
+    final name = application['name']?.toString() ?? '-';
+    final email = application['email']?.toString() ?? '-';
 
     final status =
-        application['admin_event_status']?.toString() ??
-            'none';
+        application['admin_event_status']?.toString() ?? 'none';
 
     final rejectionReason =
-        application['admin_event_rejection_reason']
-            ?.toString();
+        application['admin_event_rejection_reason']?.toString();
 
     final reviewedAt =
-        application['admin_event_reviewed_at']
-            ?.toString();
+        application['admin_event_reviewed_at']?.toString();
 
-    final userId =
-        application['id']?.toString() ?? '-';
+    final userId = application['id']?.toString() ?? '-';
 
     final statusColor = _statusColor(status);
 
@@ -607,8 +594,7 @@ class _AdminAdminEventApplicationsPageState
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         name,
@@ -657,8 +643,7 @@ class _AdminAdminEventApplicationsPageState
               style: const TextStyle(fontSize: 13),
             ),
 
-            if (reviewedAt != null &&
-                reviewedAt.isNotEmpty) ...[
+            if (reviewedAt != null && reviewedAt.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(
                 'Ditinjau: $reviewedAt',
@@ -675,9 +660,7 @@ class _AdminAdminEventApplicationsPageState
               const SizedBox(height: 10),
               const Text(
                 'Alasan penolakan:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(rejectionReason),
@@ -691,18 +674,14 @@ class _AdminAdminEventApplicationsPageState
                     child: OutlinedButton.icon(
                       onPressed: _isSubmitting
                           ? null
-                          : () {
-                              _rejectApplication(application);
-                            },
+                          : () => _rejectApplication(application),
                       icon: const Icon(
                         Icons.close,
                         color: Colors.red,
                       ),
                       label: const Text(
                         'Tolak',
-                        style: TextStyle(
-                          color: Colors.red,
-                        ),
+                        style: TextStyle(color: Colors.red),
                       ),
                     ),
                   ),
@@ -711,9 +690,7 @@ class _AdminAdminEventApplicationsPageState
                     child: ElevatedButton.icon(
                       onPressed: _isSubmitting
                           ? null
-                          : () {
-                              _confirmApproval(application);
-                            },
+                          : () => _confirmApproval(application),
                       icon: const Icon(Icons.check),
                       label: const Text('Setujui'),
                     ),
@@ -728,6 +705,18 @@ class _AdminAdminEventApplicationsPageState
   }
 
   // ============================================================
+  // BACK NAVIGATION
+  // ============================================================
+
+  void _goBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/admin');
+    }
+  }
+
+  // ============================================================
   // BUILD
   // ============================================================
 
@@ -737,15 +726,21 @@ class _AdminAdminEventApplicationsPageState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Persetujuan Admin Event',
+        automaticallyImplyLeading: false,
+
+        // Tombol kembali
+        leading: IconButton(
+          tooltip: 'Kembali',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _goBack,
         ),
+
+        title: const Text('Persetujuan Admin Event'),
+
         actions: [
           IconButton(
             tooltip: 'Muat ulang',
-            onPressed: _isLoading
-                ? null
-                : _loadApplications,
+            onPressed: _isLoading ? null : _loadApplications,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -755,35 +750,26 @@ class _AdminAdminEventApplicationsPageState
         children: [
           // Tombol buat akun Admin Event
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              4,
-            ),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _isSubmitting
                     ? null
                     : _showCreateAdminEventDialog,
-                icon: const Icon(
-                  Icons.person_add_alt_1,
-                ),
-                label: const Text(
-                  'Buat Akun Admin Event',
-                ),
+                icon: const Icon(Icons.person_add_alt_1),
+                label: const Text('Buat Akun Admin Event'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 13,
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
                 ),
               ),
             ),
           ),
 
+          // Filter status
           _buildStatusFilter(),
 
+          // Daftar pengajuan
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -814,11 +800,8 @@ class _AdminAdminEventApplicationsPageState
                     : RefreshIndicator(
                         onRefresh: _loadApplications,
                         child: ListView.builder(
-                          physics:
-                              const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(
-                            bottom: 20,
-                          ),
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 20),
                           itemCount: applications.length,
                           itemBuilder: (context, index) {
                             return _buildApplicationCard(
