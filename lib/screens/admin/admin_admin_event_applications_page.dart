@@ -252,9 +252,13 @@ class _AdminAdminEventApplicationsPageState
         password: password,
       );
 
+      // Pastikan halaman utama masih aktif.
       if (!mounted) return;
 
-      Navigator.pop(dialogContext);
+      // Pastikan dialog masih aktif sebelum menutupnya.
+      if (dialogContext.mounted) {
+        Navigator.pop(dialogContext);
+      }
 
       _showMessage(
         'Akun Admin Event berhasil dibuat dan langsung aktif.',
@@ -278,6 +282,8 @@ class _AdminAdminEventApplicationsPageState
       }
     }
   }
+
+
 
   // ============================================================
   // REVIEW APPLICATION
