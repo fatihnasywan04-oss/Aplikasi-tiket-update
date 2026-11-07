@@ -52,6 +52,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
   DateTime? _parseWibDateTime(dynamic value) {
     if (value == null) return null;
+
     final raw = value.toString().trim();
     if (raw.isEmpty) return null;
 
@@ -60,15 +61,24 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
       if (RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(raw)) {
         final wib = parsed.toUtc().add(const Duration(hours: 7));
+
         return DateTime(
-          wib.year, wib.month, wib.day,
-          wib.hour, wib.minute, wib.second,
+          wib.year,
+          wib.month,
+          wib.day,
+          wib.hour,
+          wib.minute,
+          wib.second,
         );
       }
 
       return DateTime(
-        parsed.year, parsed.month, parsed.day,
-        parsed.hour, parsed.minute, parsed.second,
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
       );
     } catch (_) {
       return null;
@@ -81,12 +91,14 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
       ['event_date', 'date', 'tanggal'],
       fallback: '',
     );
+
     if (raw.isEmpty) return null;
     return _parseWibDateTime(raw);
   }
 
   DateTime? _eventEndDate(Map<String, dynamic> event) {
     final raw = _value(event, ['end_date'], fallback: '');
+
     if (raw.isEmpty) return _eventDate(event);
     return _parseWibDateTime(raw) ?? _eventDate(event);
   }
@@ -95,9 +107,18 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     if (date == null) return 'Tanggal belum tersedia';
 
     const months = [
-      'Januari', 'Februari', 'Maret', 'April',
-      'Mei', 'Juni', 'Juli', 'Agustus',
-      'September', 'Oktober', 'November', 'Desember',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year} '
@@ -118,9 +139,18 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     }
 
     const months = [
-      'Januari', 'Februari', 'Maret', 'April',
-      'Mei', 'Juni', 'Juli', 'Agustus',
-      'September', 'Oktober', 'November', 'Desember',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
 
     if (start.year == end.year &&
@@ -156,42 +186,36 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
   }
 
   String _priceRange(Map<String, dynamic> event) {
-    dynamic rawClasses;
-
-    for (final key in [
-      'ticket_classes',
-      'ticketClasses',
-      'ticket_classes_list',
-      'ticket_types',
-      'ticketTypes',
-    ]) {
-      if (event[key] is List) {
-        rawClasses = event[key];
-        break;
-      }
-    }
+    final rawClasses = event['ticket_classes'] ??
+        event['ticketClasses'] ??
+        event['ticket_classes_list'] ??
+        event['ticket_types'] ??
+        event['ticketTypes'];
 
     final prices = <num>[];
 
     if (rawClasses is List) {
       for (final item in rawClasses) {
         if (item is! Map) continue;
+
         final ticket = Map<String, dynamic>.from(item);
         final rawPrice =
             ticket['price'] ?? ticket['ticket_price'] ?? ticket['harga'];
 
         if (rawPrice == null) continue;
-        final price = num.tryParse(rawPrice.toString());
 
+        final price = num.tryParse(rawPrice.toString());
         if (price != null && price >= 0) prices.add(price);
       }
     }
 
     if (prices.isNotEmpty) {
       prices.sort();
+
       if (prices.first == prices.last) {
         return _formatRupiah(prices.first);
       }
+
       return '${_formatRupiah(prices.first)} – '
           '${_formatRupiah(prices.last)}';
     }
@@ -199,7 +223,44 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     final basePrice = _toNum(
       event['price'] ?? event['ticket_price'] ?? event['harga'],
     );
+
     return _formatRupiah(basePrice);
+  }
+
+  String _approvalStatus(Map<String, dynamic> event) {
+    final status = (event['approval_status'] ??
+            event['status'] ??
+            'pending')
+        .toString()
+        .toLowerCase();
+
+    switch (status) {
+      case 'approved':
+        return 'Disetujui';
+      case 'rejected':
+        return 'Ditolak';
+      case 'pending':
+        return 'Menunggu Persetujuan';
+      default:
+        return status;
+    }
+  }
+
+  Color _approvalColor(Map<String, dynamic> event) {
+    final status = (event['approval_status'] ??
+            event['status'] ??
+            'pending')
+        .toString()
+        .toLowerCase();
+
+    switch (status) {
+      case 'approved':
+        return Colors.green;
+      case 'rejected':
+        return AppColors.error;
+      default:
+        return Colors.orange;
+    }
   }
 
   Future<void> _load() async {
@@ -211,7 +272,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     }
 
     try {
-      final result = await ApiService.getEvents();
+      // Mengambil semua event pengelola, termasuk pending dan rejected.
+      final result = await ApiService.getMyEvents();
+
       if (!mounted) return;
 
       setState(() {
@@ -241,8 +304,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
       _message(
         event == null
             ? 'Event dan kelas tiket berhasil ditambahkan.'
-            : 'Event berhasil diperbarui.',
+            : 'Perubahan event berhasil diajukan/disimpan.',
       );
+
       await _load();
     }
   }
@@ -267,8 +331,10 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
         backgroundColor: AppColors.surface,
         title: const Text('Hapus event?'),
         content: Text(
-          'Event "$title" akan dihapus beserta data terkait '
-          'sesuai aturan penghapusan pada backend.',
+          'Apakah kamu yakin ingin menghapus "$title"?\n\n'
+          'Riwayat pesanan dan pembayaran harus tetap dipertahankan '
+          'oleh backend. Jika event memiliki transaksi, backend harus '
+          'menggunakan mekanisme soft-delete atau permintaan penghapusan.',
         ),
         actions: [
           TextButton(
@@ -291,12 +357,14 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
     try {
       await ApiService.deleteEvent(id);
+
       if (!mounted) return;
 
-      _message('Event berhasil dihapus.');
+      _message('Permintaan penghapusan event berhasil diproses.');
       await _load();
     } catch (e) {
       if (!mounted) return;
+
       _message(
         'Gagal menghapus event: '
         '${e.toString().replaceFirst('Exception: ', '')}',
@@ -306,10 +374,24 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
   void _message(String text) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(text),
         behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Widget _eventImagePlaceholder() {
+    return const ColoredBox(
+      color: AppColors.surfaceDark,
+      child: Center(
+        child: Icon(
+          Icons.event_rounded,
+          color: AppColors.gold,
+          size: 34,
+        ),
       ),
     );
   }
@@ -337,6 +419,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
     final priceRange = _priceRange(event);
     final isCancelled = event['is_cancelled'] == true;
+    final isDeleted = event['is_deleted'] == true;
+    final status = _approvalStatus(event);
+    final statusColor = _approvalColor(event);
 
     return Card(
       elevation: 0,
@@ -384,11 +469,35 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                           fontSize: 16,
                         ),
                       ),
-                      if (isCancelled) ...[
-                        const SizedBox(height: 5),
-                        const Text(
-                          'EVENT DIBATALKAN',
+                      const SizedBox(height: 7),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: statusColor.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Text(
+                          status,
                           style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (isCancelled || isDeleted) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          isDeleted
+                              ? 'EVENT DIHAPUS'
+                              : 'EVENT DIBATALKAN',
+                          style: const TextStyle(
                             color: AppColors.error,
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -453,7 +562,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: id == null || isCancelled
+                    onPressed: id == null || isCancelled || isDeleted
                         ? null
                         : () => _openForm(event: event),
                     icon: const Icon(Icons.edit_outlined, size: 18),
@@ -463,7 +572,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                 const SizedBox(width: 10),
                 IconButton(
                   tooltip: 'Hapus event',
-                  onPressed: () => _delete(event),
+                  onPressed: isDeleted ? null : () => _delete(event),
                   icon: const Icon(
                     Icons.delete_outline_rounded,
                     color: AppColors.error,
@@ -472,19 +581,6 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _eventImagePlaceholder() {
-    return const ColoredBox(
-      color: AppColors.surfaceDark,
-      child: Center(
-        child: Icon(
-          Icons.event_rounded,
-          color: AppColors.gold,
-          size: 34,
         ),
       ),
     );
@@ -549,7 +645,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                         Text(
                           _error!,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.textMuted),
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         FilledButton.icon(
@@ -587,7 +685,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                           child: Text(
                             'Tekan Tambah Event untuk membuat event baru.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: AppColors.textMuted),
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                            ),
                           ),
                         ),
                       ],
@@ -598,13 +698,16 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                       backgroundColor: AppColors.surface,
                       child: ListView.separated(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                        padding: const EdgeInsets.fromLTRB(
+                          16, 16, 16, 100,
+                        ),
                         itemCount: _events.length,
                         separatorBuilder: (_, _) =>
                             const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final event =
                               Map<String, dynamic>.from(_events[index]);
+
                           return _buildEventCard(event);
                         },
                       ),
@@ -674,7 +777,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   late final TextEditingController _locationController;
   late final TextEditingController _instagramController;
   late final TextEditingController _imageController;
-  late final TextEditingController _stockController;
 
   final List<_TicketClassInput> _ticketClasses = [];
 
@@ -691,14 +793,20 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
   DateTime _nowWib() {
     final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+
     return DateTime(
-      now.year, now.month, now.day,
-      now.hour, now.minute, now.second,
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      now.second,
     );
   }
 
   DateTime? _parseWibDateTime(dynamic value) {
     if (value == null) return null;
+
     final raw = value.toString().trim();
     if (raw.isEmpty) return null;
 
@@ -707,15 +815,24 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
       if (RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(raw)) {
         final wib = parsed.toUtc().add(const Duration(hours: 7));
+
         return DateTime(
-          wib.year, wib.month, wib.day,
-          wib.hour, wib.minute, wib.second,
+          wib.year,
+          wib.month,
+          wib.day,
+          wib.hour,
+          wib.minute,
+          wib.second,
         );
       }
 
       return DateTime(
-        parsed.year, parsed.month, parsed.day,
-        parsed.hour, parsed.minute, parsed.second,
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
       );
     } catch (_) {
       return null;
@@ -733,6 +850,22 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     return '$year-$month-${day}T$hour:$minute:$second+07:00';
   }
 
+  String _read(
+    Map<String, dynamic> data,
+    List<String> keys, {
+    String fallback = '',
+  }) {
+    for (final key in keys) {
+      final value = data[key];
+
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+
+    return fallback;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -747,24 +880,21 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     _titleController = TextEditingController(
       text: _read(event, ['title', 'name', 'nama_event']),
     );
+
     _descriptionController = TextEditingController(
       text: _read(event, ['description', 'deskripsi']),
     );
+
     _locationController = TextEditingController(
       text: _read(event, ['location', 'venue', 'lokasi']),
     );
+
     _instagramController = TextEditingController(
       text: _read(event, ['instagram_username']),
     );
+
     _imageController = TextEditingController(
       text: _read(event, ['image_url', 'poster_url', 'image', 'gambar']),
-    );
-    _stockController = TextEditingController(
-      text: _read(
-        event,
-        ['available_tickets', 'stock', 'ticket_stock'],
-        fallback: '0',
-      ),
     );
 
     final parsedDate = _parseWibDateTime(
@@ -773,21 +903,30 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     if (parsedDate != null) {
       _selectedDate = DateTime(
-        parsedDate.year, parsedDate.month, parsedDate.day,
+        parsedDate.year,
+        parsedDate.month,
+        parsedDate.day,
       );
+
       _selectedTime = TimeOfDay.fromDateTime(parsedDate);
     } else {
       final now = _nowWib();
+
       _selectedDate = DateTime(now.year, now.month, now.day + 1);
       _selectedTime = const TimeOfDay(hour: 19, minute: 0);
     }
 
-    final parsedEndDate = _parseWibDateTime(_read(event, ['end_date']));
+    final parsedEndDate = _parseWibDateTime(
+      _read(event, ['end_date']),
+    );
 
     if (parsedEndDate != null) {
       _selectedEndDate = DateTime(
-        parsedEndDate.year, parsedEndDate.month, parsedEndDate.day,
+        parsedEndDate.year,
+        parsedEndDate.month,
+        parsedEndDate.day,
       );
+
       _selectedEndTime = TimeOfDay.fromDateTime(parsedEndDate);
     } else {
       _selectedEndDate = _selectedDate;
@@ -799,30 +938,21 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         _TicketClassInput(
           name: 'Standard',
           price: '0',
-          stock: _stockController.text,
+          stock: '100',
         ),
       );
     }
   }
 
-  String _read(
-    Map<String, dynamic> data,
-    List<String> keys, {
-    String fallback = '',
-  }) {
-    for (final key in keys) {
-      final value = data[key];
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
-    }
-    return fallback;
-  }
-
   num _toNumFallback(Map<String, dynamic>? event) {
     if (event == null) return 0;
-    final value = event['price'] ?? event['ticket_price'] ?? event['harga'];
+
+    final value = event['price'] ??
+        event['ticket_price'] ??
+        event['harga'];
+
     if (value is num) return value;
+
     return num.tryParse(value?.toString() ?? '') ?? 0;
   }
 
@@ -836,6 +966,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       }
       buffer.write(digits[i]);
     }
+
     return 'Rp $buffer';
   }
 
@@ -844,12 +975,16 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     for (final ticket in _ticketClasses) {
       final price = num.tryParse(ticket.priceController.text.trim());
-      if (price != null && price >= 0) prices.add(price);
+
+      if (price != null && price >= 0) {
+        prices.add(price);
+      }
     }
 
     if (prices.isEmpty) return 'Masukkan harga kelas tiket';
 
     prices.sort();
+
     if (prices.first == prices.last) {
       return 'Mulai dari ${_formatRupiah(prices.first)}';
     }
@@ -860,8 +995,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
   DateTime _combineDateAndTime(DateTime date, TimeOfDay time) {
     return DateTime(
-      date.year, date.month, date.day,
-      time.hour, time.minute,
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
     );
   }
 
@@ -869,9 +1007,18 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     if (date == null) return 'Pilih tanggal';
 
     const months = [
-      'Januari', 'Februari', 'Maret', 'April',
-      'Mei', 'Juni', 'Juli', 'Agustus',
-      'September', 'Oktober', 'November', 'Desember',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year}';
@@ -895,6 +1042,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       });
     } catch (e) {
       if (!mounted) return;
+
       _message(
         'Gagal memilih poster: '
         '${e.toString().replaceFirst('Exception: ', '')}',
@@ -909,7 +1057,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.image_outlined, color: AppColors.gold, size: 42),
+            Icon(
+              Icons.image_outlined,
+              color: AppColors.gold,
+              size: 42,
+            ),
             SizedBox(height: 8),
             Text(
               'Belum ada poster',
@@ -1010,7 +1162,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
             style: TextStyle(
               color: AppColors.textMuted,
               fontSize: 12,
-              height: 1.4,
             ),
           ),
         ],
@@ -1025,7 +1176,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }) {
     setState(() {
       _ticketClasses.add(
-        _TicketClassInput(name: name, price: price, stock: stock),
+        _TicketClassInput(
+          name: name,
+          price: price,
+          stock: stock,
+        ),
       );
     });
   }
@@ -1041,15 +1196,13 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       ticket.dispose();
     });
   }
-
-  @override
+    @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
     _instagramController.dispose();
     _imageController.dispose();
-    _stockController.dispose();
 
     for (final ticket in _ticketClasses) {
       ticket.dispose();
@@ -1057,15 +1210,20 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     super.dispose();
   }
+
   Future<void> _pickStartDate() async {
     final now = _nowWib();
     final today = DateTime(now.year, now.month, now.day);
+
     final initial = _selectedDate ?? today.add(const Duration(days: 1));
+
+    // Saat edit, tanggal lampau tetap boleh dipertahankan.
+    final firstDate = _isEditing ? DateTime(2000, 1, 1) : today;
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: initial.isBefore(today) ? today : initial,
-      firstDate: today,
+      initialDate: initial.isBefore(firstDate) ? firstDate : initial,
+      firstDate: firstDate,
       lastDate: DateTime(today.year + 10),
       helpText: 'Pilih tanggal mulai event',
       cancelText: 'Batal',
@@ -1087,13 +1245,15 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   Future<void> _pickStartTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: _selectedTime ?? const TimeOfDay(hour: 19, minute: 0),
+      initialTime: _selectedTime ??
+          const TimeOfDay(hour: 19, minute: 0),
       helpText: 'Pilih waktu mulai event',
       cancelText: 'Batal',
       confirmText: 'Pilih',
     );
 
     if (picked == null || !mounted) return;
+
     setState(() => _selectedTime = picked);
   }
 
@@ -1114,19 +1274,22 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     );
 
     if (picked == null || !mounted) return;
+
     setState(() => _selectedEndDate = picked);
   }
 
   Future<void> _pickEndTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: _selectedEndTime ?? const TimeOfDay(hour: 21, minute: 0),
+      initialTime: _selectedEndTime ??
+          const TimeOfDay(hour: 21, minute: 0),
       helpText: 'Pilih waktu selesai event',
       cancelText: 'Batal',
       confirmText: 'Pilih',
     );
 
     if (picked == null || !mounted) return;
+
     setState(() => _selectedEndTime = picked);
   }
 
@@ -1134,6 +1297,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     if (value == null || value.trim().isEmpty) {
       return '$label wajib diisi.';
     }
+
     return null;
   }
 
@@ -1156,40 +1320,19 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     return null;
   }
 
-  String? _numberValidator(
-    String? value, {
-    required String label,
-    required bool allowZero,
-  }) {
-    final parsed = num.tryParse((value ?? '').trim());
-
-    if (parsed == null) return '$label harus berupa angka.';
-    if (!parsed.isFinite) return '$label tidak valid.';
-
-    if (parsed < 0 || (!allowZero && parsed == 0)) {
-      return allowZero
-          ? '$label tidak boleh negatif.'
-          : '$label harus lebih dari nol.';
-    }
-
-    if (!allowZero && parsed != parsed.roundToDouble()) {
-      return '$label harus berupa bilangan bulat.';
-    }
-
-    return null;
-  }
-
   String? _ticketNameValidator(String? value, int index) {
-    if (_isEditing) return null;
-
     final name = (value ?? '').trim();
 
     if (name.isEmpty) return 'Nama kelas tiket wajib diisi.';
-    if (name.length > 30) return 'Nama tiket maksimal 30 karakter.';
+    if (name.length > 30) {
+      return 'Nama tiket maksimal 30 karakter.';
+    }
 
     final normalized = name.toLowerCase();
+
     final duplicates = _ticketClasses.where((ticket) {
-      return ticket.nameController.text.trim().toLowerCase() == normalized;
+      return ticket.nameController.text.trim().toLowerCase() ==
+          normalized;
     }).length;
 
     if (duplicates > 1) {
@@ -1200,8 +1343,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }
 
   String? _ticketPriceValidator(String? value) {
-    if (_isEditing) return null;
-
     final price = num.tryParse((value ?? '').trim());
 
     if (price == null || !price.isFinite || price < 0) {
@@ -1212,8 +1353,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
   }
 
   String? _ticketStockValidator(String? value) {
-    if (_isEditing) return null;
-
     final stock = int.tryParse((value ?? '').trim());
 
     if (stock == null || stock < 0) {
@@ -1261,16 +1400,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       return;
     }
 
-    final stock = int.tryParse(_stockController.text.trim());
-
-    if (stock == null || stock < 0) {
-      _message('Stok dasar tidak valid.');
-      return;
-    }
-
     num price;
+    int totalStock = 0;
 
     if (_isEditing) {
+      // Edit event tidak mengubah harga dan stok kelas tiket.
       price = _toNumFallback(widget.event);
     } else {
       if (_ticketClasses.isEmpty) {
@@ -1279,11 +1413,16 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       }
 
       final ticketPrices = <num>[];
+      final names = <String>[];
 
       for (final ticket in _ticketClasses) {
         final ticketName = ticket.nameController.text.trim();
-        final ticketPrice = num.tryParse(ticket.priceController.text.trim());
-        final ticketStock = int.tryParse(ticket.stockController.text.trim());
+        final ticketPrice = num.tryParse(
+          ticket.priceController.text.trim(),
+        );
+        final ticketStock = int.tryParse(
+          ticket.stockController.text.trim(),
+        );
 
         if (ticketName.isEmpty ||
             ticketName.length > 30 ||
@@ -1297,11 +1436,10 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         }
 
         ticketPrices.add(ticketPrice);
-      }
+        names.add(ticketName.toLowerCase());
 
-      final names = _ticketClasses
-          .map((ticket) => ticket.nameController.text.trim().toLowerCase())
-          .toList();
+        totalStock += ticketStock;
+      }
 
       if (names.toSet().length != names.length) {
         _message('Nama kelas tiket tidak boleh duplikat.');
@@ -1313,6 +1451,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     }
 
     final rawId = widget.event?['id'] ?? widget.event?['event_id'];
+
     final id = rawId is int
         ? rawId
         : int.tryParse(rawId?.toString() ?? '');
@@ -1351,13 +1490,18 @@ class _EventFormDialogState extends State<_EventFormDialog> {
             instagramUsername.isEmpty ? null : instagramUsername,
         'event_date': _formatWibDateTime(chosenDateTime),
         'end_date': _formatWibDateTime(chosenEndDateTime),
-        'price': price,
-        'available_tickets': stock,
       };
 
       if (_isEditing) {
+        // Tidak mengirim price atau available_tickets ketika edit.
+        // Harga dan stok tetap dikelola pada kelas tiket.
         await ApiService.updateEvent(id!, payload);
       } else {
+        // Field price dan available_tickets tetap dikirim
+        // untuk kompatibilitas dengan EventCreate backend.
+        payload['price'] = price;
+        payload['available_tickets'] = totalStock;
+
         final createdEvent = await ApiService.createEvent(payload);
 
         final rawCreatedId =
@@ -1374,18 +1518,21 @@ class _EventFormDialogState extends State<_EventFormDialog> {
           );
         }
 
+        // Buat kelas tiket satu per satu.
         for (final ticket in _ticketClasses) {
           await ApiService.createTicketClass(
             eventId: createdEventId,
             name: ticket.nameController.text.trim(),
             price: num.parse(ticket.priceController.text.trim()),
-            availableTickets:
-                int.parse(ticket.stockController.text.trim()),
+            availableTickets: int.parse(
+              ticket.stockController.text.trim(),
+            ),
           );
         }
       }
 
       if (!mounted) return;
+
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -1395,7 +1542,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         '${e.toString().replaceFirst('Exception: ', '')}',
       );
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+      }
     }
   }
 
@@ -1430,8 +1579,12 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          labelStyle: const TextStyle(color: AppColors.textSecondary),
-          hintStyle: const TextStyle(color: AppColors.textMuted),
+          labelStyle: const TextStyle(
+            color: AppColors.textSecondary,
+          ),
+          hintStyle: const TextStyle(
+            color: AppColors.textMuted,
+          ),
           filled: true,
           fillColor: AppColors.surfaceDark,
           border: OutlineInputBorder(
@@ -1439,7 +1592,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.border),
+            borderSide: const BorderSide(
+              color: AppColors.border,
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -1466,7 +1621,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
         style: const TextStyle(color: AppColors.text),
         decoration: InputDecoration(
           labelText: 'Kategori Event *',
-          labelStyle: const TextStyle(color: AppColors.textSecondary),
+          labelStyle: const TextStyle(
+            color: AppColors.textSecondary,
+          ),
           filled: true,
           fillColor: AppColors.surfaceDark,
           border: OutlineInputBorder(
@@ -1474,11 +1631,15 @@ class _EventFormDialogState extends State<_EventFormDialog> {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.border),
+            borderSide: const BorderSide(
+              color: AppColors.border,
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.gold),
+            borderSide: const BorderSide(
+              color: AppColors.gold,
+            ),
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 14,
@@ -1495,6 +1656,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
             ? null
             : (value) {
                 if (value == null) return;
+
                 setState(() => _selectedCategory = value);
               },
       ),
@@ -1585,7 +1747,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 ),
                 IconButton(
                   tooltip: 'Hapus kelas tiket',
-                  onPressed: _saving ? null : () => _removeTicketClass(index),
+                  onPressed: _saving
+                      ? null
+                      : () => _removeTicketClass(index),
                   icon: const Icon(
                     Icons.delete_outline,
                     color: AppColors.error,
@@ -1605,7 +1769,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 fillColor: AppColors.surfaceDark,
                 border: OutlineInputBorder(),
               ),
-              validator: (value) => _ticketNameValidator(value, index),
+              validator: (value) =>
+                  _ticketNameValidator(value, index),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -1731,18 +1896,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   validator: _instagramValidator,
                 ),
                 _buildPosterPicker(),
+
                 if (!_isEditing) ...[
                   _buildPriceRangeCard(),
-                  _field(
-                    label: 'Stok dasar *',
-                    controller: _stockController,
-                    keyboardType: TextInputType.number,
-                    validator: (value) => _numberValidator(
-                      value,
-                      label: 'Stok',
-                      allowZero: true,
-                    ),
-                  ),
                   const SizedBox(height: 4),
                   const Align(
                     alignment: Alignment.centerLeft,
@@ -1760,7 +1916,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Tambahkan kelas tiket beserta harga dan stoknya. '
-                      'Jangkauan harga akan berubah otomatis.',
+                      'Stok event dihitung dari total stok kelas tiket.',
                       style: TextStyle(
                         color: AppColors.textMuted,
                         fontSize: 12,
@@ -1775,28 +1931,20 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _saving ? null : () => _addTicketClass(),
+                      onPressed: _saving
+                          ? null
+                          : () => _addTicketClass(),
                       icon: const Icon(Icons.add),
                       label: const Text('Tambah Jenis Tiket'),
                     ),
                   ),
                 ] else ...[
-                  _field(
-                    label: 'Stok dasar *',
-                    controller: _stockController,
-                    keyboardType: TextInputType.number,
-                    validator: (value) => _numberValidator(
-                      value,
-                      label: 'Stok',
-                      allowZero: true,
-                    ),
-                  ),
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Kelas tiket yang sudah ada dikelola melalui fitur '
-                      'kelas tiket tersendiri. Mengubah event di sini '
-                      'tidak mengubah harga kelas tiket.',
+                      'Harga dan stok kelas tiket tidak diubah melalui '
+                      'form ini. Pengelolaan kelas tiket dilakukan '
+                      'melalui fitur kelas tiket tersendiri.',
                       style: TextStyle(
                         color: AppColors.textMuted,
                         fontSize: 12,
@@ -1805,11 +1953,13 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     ),
                   ),
                 ],
+
                 const SizedBox(height: 18),
                 _buildDateTimePicker(
                   title: 'Tanggal dan waktu mulai event * (WIB)',
                   dateLabel: _dateLabel(_selectedDate),
-                  timeLabel: _selectedTime?.format(context) ?? 'Pilih waktu',
+                  timeLabel:
+                      _selectedTime?.format(context) ?? 'Pilih waktu',
                   onPickDate: _pickStartDate,
                   onPickTime: _pickStartTime,
                 ),
@@ -1817,8 +1967,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                 _buildDateTimePicker(
                   title: 'Tanggal dan waktu selesai event * (WIB)',
                   dateLabel: _dateLabel(_selectedEndDate),
-                  timeLabel:
-                      _selectedEndTime?.format(context) ?? 'Pilih waktu',
+                  timeLabel: _selectedEndTime?.format(context) ??
+                      'Pilih waktu',
                   onPickDate: _pickEndDate,
                   onPickTime: _pickEndTime,
                 ),
@@ -1834,17 +1984,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Jangkauan harga dihitung dari harga kelas tiket. '
-                  'Backend menerima harga event berupa harga terendah '
-                  'agar kompatibel dengan API.',
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
-                ),
               ],
             ),
           ),
@@ -1852,7 +1991,9 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          onPressed: _saving
+              ? null
+              : () => Navigator.pop(context, false),
           child: const Text('Batal'),
         ),
         FilledButton.icon(

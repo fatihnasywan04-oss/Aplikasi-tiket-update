@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
-import '../auth/login_page.dart';
+import 'admin_event_drawer_page.dart';
 
 class AdminEventDashboardPage extends StatefulWidget {
   const AdminEventDashboardPage({super.key});
@@ -22,8 +22,95 @@ class _AdminEventDashboardPageState
     _dashboardFuture = _loadDashboard();
   }
 
-  Future<Map<String, dynamic>> _loadDashboard() {
-    return ApiService.getOrganizerDashboard();
+  // Mengambil event, pesanan, dan pembayaran Admin Event.
+  Future<Map<String, dynamic>> _loadDashboard() async {
+    final results = await Future.wait([
+      ApiService.getMyEvents(),
+      ApiService.getAdminOrders(),
+      ApiService.getAdminPayments(),
+    ]);
+
+    final events = results[0];
+    final orders = results[1];
+    final payments = results[2];
+
+    int pendingEvents = 0;
+    int approvedEvents = 0;
+    int rejectedEvents = 0;
+
+    for (final event in events) {
+      final status = (event['approval_status'] ??
+              event['status'] ??
+              'pending')
+          .toString()
+          .toLowerCase();
+
+      if (status == 'approved') {
+        approvedEvents++;
+      } else if (status == 'rejected') {
+        rejectedEvents++;
+      } else {
+        pendingEvents++;
+      }
+    }
+
+    int paidOrders = 0;
+    int pendingOrders = 0;
+    int cancelledOrders = 0;
+
+    for (final order in orders) {
+      final status = (order['status'] ??
+              order['order_status'] ??
+              '')
+          .toString()
+          .toLowerCase();
+
+      if (status == 'paid' || status == 'success') {
+        paidOrders++;
+      } else if (status == 'pending') {
+        pendingOrders++;
+      } else if (status == 'cancelled' ||
+          status == 'canceled') {
+        cancelledOrders++;
+      }
+    }
+
+    int successfulPayments = 0;
+    int pendingPayments = 0;
+    int failedPayments = 0;
+
+    for (final payment in payments) {
+      final status = (payment['status'] ??
+              payment['payment_status'] ??
+              '')
+          .toString()
+          .toLowerCase();
+
+      if (status == 'success' || status == 'paid') {
+        successfulPayments++;
+      } else if (status == 'pending') {
+        pendingPayments++;
+      } else if (status == 'failed' ||
+          status == 'cancelled' ||
+          status == 'canceled') {
+        failedPayments++;
+      }
+    }
+
+    return {
+      'total_events': events.length,
+      'pending_events': pendingEvents,
+      'approved_events': approvedEvents,
+      'rejected_events': rejectedEvents,
+      'total_orders': orders.length,
+      'paid_orders': paidOrders,
+      'pending_orders': pendingOrders,
+      'cancelled_orders': cancelledOrders,
+      'total_payments': payments.length,
+      'successful_payments': successfulPayments,
+      'pending_payments': pendingPayments,
+      'failed_payments': failedPayments,
+    };
   }
 
   Future<void> _refresh() async {
@@ -42,76 +129,24 @@ class _AdminEventDashboardPageState
 
   int _readNumber(
     Map<String, dynamic> data,
-    List<String> possibleKeys,
+    String key,
   ) {
-    for (final key in possibleKeys) {
-      final value = data[key];
+    final value = data[key];
 
-      if (value is num) return value.toInt();
+    if (value is num) return value.toInt();
 
-      if (value != null) {
-        final parsed = int.tryParse(value.toString());
-        if (parsed != null) return parsed;
-      }
+    if (value != null) {
+      return int.tryParse(value.toString()) ?? 0;
     }
 
     return 0;
-  }
-
-  Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: const Text('Keluar akun?'),
-        content: const Text(
-          'Apakah kamu yakin ingin keluar dari akun Admin Event?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Keluar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await ApiService.logout();
-    } catch (error) {
-      debugPrint('[AdminEventDashboard] Logout gagal: $error');
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Gagal menghapus sesi. Silakan coba lagi.'),
-        ),
-      );
-
-      return;
-    }
-
-    if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (_) => const LoginPage(),
-      ),
-      (route) => false,
-    );
   }
 
   Widget _buildMetric({
     required String title,
     required int value,
     required IconData icon,
+    String? subtitle,
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -157,6 +192,16 @@ class _AdminEventDashboardPageState
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -165,21 +210,62 @@ class _AdminEventDashboardPageState
     );
   }
 
-  Widget _buildDashboard(Map<String, dynamic> data) {
-    final totalEvents = _readNumber(
-      data,
-      ['total_events', 'event_count', 'my_events'],
+  Widget _buildStatusRow({
+    required String title,
+    required int value,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            value.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
+  }
+    Widget _buildDashboard(Map<String, dynamic> data) {
+    final totalEvents = _readNumber(data, 'total_events');
+    final pendingEvents = _readNumber(data, 'pending_events');
+    final approvedEvents = _readNumber(data, 'approved_events');
+    final rejectedEvents = _readNumber(data, 'rejected_events');
 
-    final totalOrders = _readNumber(
-      data,
-      ['total_orders', 'order_count', 'my_orders'],
-    );
+    final totalOrders = _readNumber(data, 'total_orders');
+    final paidOrders = _readNumber(data, 'paid_orders');
+    final pendingOrders = _readNumber(data, 'pending_orders');
+    final cancelledOrders = _readNumber(data, 'cancelled_orders');
 
-    final totalPayments = _readNumber(
-      data,
-      ['total_payments', 'payment_count', 'my_payments'],
-    );
+    final totalPayments = _readNumber(data, 'total_payments');
+    final successfulPayments =
+        _readNumber(data, 'successful_payments');
+    final pendingPayments =
+        _readNumber(data, 'pending_payments');
+    final failedPayments =
+        _readNumber(data, 'failed_payments');
 
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -187,6 +273,7 @@ class _AdminEventDashboardPageState
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         children: [
+          // Header dashboard.
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
@@ -223,7 +310,8 @@ class _AdminEventDashboardPageState
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Kelola event dan pantau aktivitas penjualan tiketmu.',
+                  'Kelola event milikmu, pantau pesanan, '
+                  'dan lihat aktivitas pembayaran.',
                   style: TextStyle(
                     color: Colors.white70,
                     height: 1.5,
@@ -232,7 +320,9 @@ class _AdminEventDashboardPageState
               ],
             ),
           ),
+
           const SizedBox(height: 24),
+
           const Text(
             'Ringkasan Aktivitas',
             style: TextStyle(
@@ -241,25 +331,155 @@ class _AdminEventDashboardPageState
               fontWeight: FontWeight.bold,
             ),
           ),
+
           const SizedBox(height: 14),
+
           _buildMetric(
-            title: 'Event',
+            title: 'Total Event',
             value: totalEvents,
             icon: Icons.event,
+            subtitle: 'Semua status pengajuan',
           ),
+
           const SizedBox(height: 12),
+
           _buildMetric(
-            title: 'Pesanan',
+            title: 'Total Pesanan',
             value: totalOrders,
             icon: Icons.confirmation_number_outlined,
           ),
+
           const SizedBox(height: 12),
+
           _buildMetric(
-            title: 'Pembayaran',
+            title: 'Total Pembayaran',
             value: totalPayments,
             icon: Icons.payments_outlined,
           ),
+
           const SizedBox(height: 24),
+
+          // Status event.
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Status Pengajuan Event',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildStatusRow(
+                  title: 'Menunggu persetujuan',
+                  value: pendingEvents,
+                  color: Colors.orange,
+                ),
+                _buildStatusRow(
+                  title: 'Disetujui',
+                  value: approvedEvents,
+                  color: Colors.green,
+                ),
+                _buildStatusRow(
+                  title: 'Ditolak',
+                  value: rejectedEvents,
+                  color: Colors.redAccent,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Status pesanan.
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Status Pesanan',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildStatusRow(
+                  title: 'Sudah dibayar',
+                  value: paidOrders,
+                  color: Colors.green,
+                ),
+                _buildStatusRow(
+                  title: 'Menunggu pembayaran',
+                  value: pendingOrders,
+                  color: Colors.orange,
+                ),
+                _buildStatusRow(
+                  title: 'Dibatalkan',
+                  value: cancelledOrders,
+                  color: Colors.redAccent,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Status pembayaran.
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Status Pembayaran',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildStatusRow(
+                  title: 'Berhasil',
+                  value: successfulPayments,
+                  color: Colors.green,
+                ),
+                _buildStatusRow(
+                  title: 'Menunggu',
+                  value: pendingPayments,
+                  color: Colors.orange,
+                ),
+                _buildStatusRow(
+                  title: 'Gagal / dibatalkan',
+                  value: failedPayments,
+                  color: Colors.redAccent,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Informasi persetujuan.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -276,10 +496,11 @@ class _AdminEventDashboardPageState
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Perubahan event dan kelas tiket dapat memerlukan '
-                    'persetujuan Super Admin. Pastikan status pengajuan '
-                    'sudah disetujui sebelum perubahan ditampilkan '
-                    'kepada pengguna.',
+                    'Event baru dari Admin Event harus menunggu '
+                    'persetujuan Super Admin. Perubahan data event '
+                    'dan kelas tiket juga diajukan untuk ditinjau. '
+                    'Pastikan kamu memeriksa status pengajuan '
+                    'secara berkala.',
                     style: TextStyle(
                       color: Colors.white70,
                       height: 1.5,
@@ -289,12 +510,16 @@ class _AdminEventDashboardPageState
               ],
             ),
           ),
+
           const SizedBox(height: 24),
+
           OutlinedButton.icon(
             onPressed: _refresh,
             icon: const Icon(Icons.refresh),
             label: const Text('Muat ulang dashboard'),
           ),
+
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -304,24 +529,25 @@ class _AdminEventDashboardPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+
+      // Drawer Admin Event.
+      drawer: const AdminEventDrawerPage(),
+
       appBar: AppBar(
         backgroundColor: AppTheme.background,
         title: const Text(
           'Hikari Organizer',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Keluar',
-            onPressed: _logout,
-            icon: const Icon(Icons.logout),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
           ),
-        ],
+        ),
       ),
+
       body: FutureBuilder<Map<String, dynamic>>(
         future: _dashboardFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(),
             );
@@ -343,7 +569,9 @@ class _AdminEventDashboardPageState
                     const Text(
                       'Dashboard belum dapat dimuat.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(

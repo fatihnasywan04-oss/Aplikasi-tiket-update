@@ -25,13 +25,79 @@ class _AdminAdminEventApplicationsPageState
   }
 
   // ============================================================
+  // HELPER RESPONSE BACKEND
+  // ============================================================
+
+  int? _getApplicationUserId(
+    Map<String, dynamic> application,
+  ) {
+    return int.tryParse(
+      (
+        application['user_id'] ??
+        application['id'] ??
+        ''
+      ).toString(),
+    );
+  }
+
+  String _getApplicationName(
+    Map<String, dynamic> application,
+  ) {
+    return (
+      application['user_name'] ??
+      application['name'] ??
+      '-'
+    ).toString();
+  }
+
+  String _getApplicationEmail(
+    Map<String, dynamic> application,
+  ) {
+    return (
+      application['user_email'] ??
+      application['email'] ??
+      '-'
+    ).toString();
+  }
+
+  String _getApplicationStatus(
+    Map<String, dynamic> application,
+  ) {
+    return (
+      application['status'] ??
+      application['admin_event_status'] ??
+      'none'
+    ).toString().toLowerCase();
+  }
+
+  String? _getRejectionReason(
+    Map<String, dynamic> application,
+  ) {
+    final value = application['rejection_reason'] ??
+        application['admin_event_rejection_reason'];
+
+    return value?.toString();
+  }
+
+  String? _getReviewedAt(
+    Map<String, dynamic> application,
+  ) {
+    final value = application['reviewed_at'] ??
+        application['admin_event_reviewed_at'];
+
+    return value?.toString();
+  }
+
+  // ============================================================
   // LOAD APPLICATIONS
   // ============================================================
 
   Future<void> _loadApplications() async {
     if (!mounted) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final data = await ApiService.getAdminEventApplications();
@@ -48,7 +114,9 @@ class _AdminAdminEventApplicationsPageState
       );
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -81,18 +149,22 @@ class _AdminAdminEventApplicationsPageState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Text(
-                        'Isi data berikut untuk membuat akun Admin Event baru. '
-                        'Akun akan langsung aktif setelah berhasil dibuat.',
+                        'Isi data berikut untuk membuat akun '
+                        'Admin Event baru. Akun akan langsung '
+                        'aktif setelah berhasil dibuat.',
                         style: TextStyle(fontSize: 13),
                       ),
                       const SizedBox(height: 20),
 
                       TextFormField(
                         controller: nameController,
-                        textCapitalization: TextCapitalization.words,
+                        textCapitalization:
+                            TextCapitalization.words,
                         decoration: const InputDecoration(
                           labelText: 'Nama Admin Event',
-                          prefixIcon: Icon(Icons.person_outline),
+                          prefixIcon: Icon(
+                            Icons.person_outline,
+                          ),
                           border: OutlineInputBorder(),
                         ),
                         validator: (value) {
@@ -118,10 +190,13 @@ class _AdminAdminEventApplicationsPageState
 
                       TextFormField(
                         controller: emailController,
-                        keyboardType: TextInputType.emailAddress,
+                        keyboardType:
+                            TextInputType.emailAddress,
                         decoration: const InputDecoration(
                           labelText: 'Email',
-                          prefixIcon: Icon(Icons.email_outlined),
+                          prefixIcon: Icon(
+                            Icons.email_outlined,
+                          ),
                           border: OutlineInputBorder(),
                         ),
                         validator: (value) {
@@ -150,12 +225,15 @@ class _AdminAdminEventApplicationsPageState
                         obscureText: obscurePassword,
                         decoration: InputDecoration(
                           labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline),
+                          prefixIcon: const Icon(
+                            Icons.lock_outline,
+                          ),
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             onPressed: () {
                               setDialogState(() {
-                                obscurePassword = !obscurePassword;
+                                obscurePassword =
+                                    !obscurePassword;
                               });
                             },
                             icon: Icon(
@@ -203,8 +281,8 @@ class _AdminAdminEventApplicationsPageState
                           }
 
                           await _createAdminEventAccount(
-                            name: nameController.text,
-                            email: emailController.text,
+                            name: nameController.text.trim(),
+                            email: emailController.text.trim(),
                             password: passwordController.text,
                             dialogContext: dialogContext,
                           );
@@ -218,9 +296,13 @@ class _AdminAdminEventApplicationsPageState
                             color: Colors.white,
                           ),
                         )
-                      : const Icon(Icons.person_add_alt_1),
+                      : const Icon(
+                          Icons.person_add_alt_1,
+                        ),
                   label: Text(
-                    _isSubmitting ? 'Membuat...' : 'Buat Akun',
+                    _isSubmitting
+                        ? 'Membuat...'
+                        : 'Buat Akun',
                   ),
                 ),
               ],
@@ -243,7 +325,9 @@ class _AdminAdminEventApplicationsPageState
   }) async {
     if (_isSubmitting) return;
 
-    setState(() => _isSubmitting = true);
+    setState(() {
+      _isSubmitting = true;
+    });
 
     try {
       await ApiService.createAdminEventAccount(
@@ -252,21 +336,19 @@ class _AdminAdminEventApplicationsPageState
         password: password,
       );
 
-      // Pastikan halaman utama masih aktif.
       if (!mounted) return;
 
-      // Pastikan dialog masih aktif sebelum menutupnya.
       if (dialogContext.mounted) {
         Navigator.pop(dialogContext);
       }
 
-      _showMessage(
-        'Akun Admin Event berhasil dibuat dan langsung aktif.',
-      );
-
       setState(() {
         _selectedStatus = 'approved';
       });
+
+      _showMessage(
+        'Akun Admin Event berhasil dibuat dan langsung aktif.',
+      );
 
       await _loadApplications();
     } catch (e) {
@@ -278,12 +360,12 @@ class _AdminAdminEventApplicationsPageState
       );
     } finally {
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() {
+          _isSubmitting = false;
+        });
       }
     }
   }
-
-
 
   // ============================================================
   // REVIEW APPLICATION
@@ -296,7 +378,9 @@ class _AdminAdminEventApplicationsPageState
   }) async {
     if (_isSubmitting) return;
 
-    setState(() => _isSubmitting = true);
+    setState(() {
+      _isSubmitting = true;
+    });
 
     try {
       await ApiService.reviewAdminEventApplication(
@@ -323,7 +407,9 @@ class _AdminAdminEventApplicationsPageState
       );
     } finally {
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() {
+          _isSubmitting = false;
+        });
       }
     }
   }
@@ -335,9 +421,7 @@ class _AdminAdminEventApplicationsPageState
   Future<void> _confirmApproval(
     Map<String, dynamic> application,
   ) async {
-    final userId = int.tryParse(
-      application['id']?.toString() ?? '',
-    );
+    final userId = _getApplicationUserId(application);
 
     if (userId == null || userId <= 0) {
       _showMessage(
@@ -354,7 +438,7 @@ class _AdminAdminEventApplicationsPageState
           title: const Text('Setujui Pengajuan?'),
           content: Text(
             'Apakah kamu yakin ingin menyetujui pengajuan dari '
-            '${application['name'] ?? 'pengguna ini'}?',
+            '${_getApplicationName(application)}?',
           ),
           actions: [
             TextButton(
@@ -389,9 +473,7 @@ class _AdminAdminEventApplicationsPageState
   Future<void> _rejectApplication(
     Map<String, dynamic> application,
   ) async {
-    final userId = int.tryParse(
-      application['id']?.toString() ?? '',
-    );
+    final userId = _getApplicationUserId(application);
 
     if (userId == null || userId <= 0) {
       _showMessage(
@@ -434,7 +516,9 @@ class _AdminAdminEventApplicationsPageState
                 final value = controller.text.trim();
 
                 if (value.isEmpty) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  ScaffoldMessenger.of(
+                    dialogContext,
+                  ).showSnackBar(
                     const SnackBar(
                       content: Text(
                         'Alasan penolakan wajib diisi.',
@@ -455,7 +539,9 @@ class _AdminAdminEventApplicationsPageState
 
     controller.dispose();
 
-    if (reason != null && reason.trim().isNotEmpty && mounted) {
+    if (reason != null &&
+        reason.trim().isNotEmpty &&
+        mounted) {
       await _reviewApplication(
         userId: userId,
         status: 'rejected',
@@ -488,7 +574,8 @@ class _AdminAdminEventApplicationsPageState
 
   List<Map<String, dynamic>> get _filteredApplications {
     return _applications.where((application) {
-      return application['admin_event_status'] == _selectedStatus;
+      return _getApplicationStatus(application) ==
+          _selectedStatus;
     }).toList();
   }
 
@@ -517,8 +604,7 @@ class _AdminAdminEventApplicationsPageState
         return Colors.grey;
     }
   }
-
-  // ============================================================
+    // ============================================================
   // STATUS FILTER WIDGET
   // ============================================================
 
@@ -561,19 +647,18 @@ class _AdminAdminEventApplicationsPageState
   Widget _buildApplicationCard(
     Map<String, dynamic> application,
   ) {
-    final name = application['name']?.toString() ?? '-';
-    final email = application['email']?.toString() ?? '-';
+    final name = _getApplicationName(application);
+    final email = _getApplicationEmail(application);
 
-    final status =
-        application['admin_event_status']?.toString() ?? 'none';
+    final status = _getApplicationStatus(application);
 
     final rejectionReason =
-        application['admin_event_rejection_reason']?.toString();
+        _getRejectionReason(application);
 
-    final reviewedAt =
-        application['admin_event_reviewed_at']?.toString();
+    final reviewedAt = _getReviewedAt(application);
 
-    final userId = application['id']?.toString() ?? '-';
+    final userId =
+        _getApplicationUserId(application)?.toString() ?? '-';
 
     final statusColor = _statusColor(status);
 
@@ -598,9 +683,11 @@ class _AdminAdminEventApplicationsPageState
                   ),
                 ),
                 const SizedBox(width: 12),
+
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
                       Text(
                         name,
@@ -620,6 +707,9 @@ class _AdminAdminEventApplicationsPageState
                     ],
                   ),
                 ),
+
+                const SizedBox(width: 8),
+
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -649,7 +739,8 @@ class _AdminAdminEventApplicationsPageState
               style: const TextStyle(fontSize: 13),
             ),
 
-            if (reviewedAt != null && reviewedAt.isNotEmpty) ...[
+            if (reviewedAt != null &&
+                reviewedAt.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(
                 'Ditinjau: $reviewedAt',
@@ -666,7 +757,9 @@ class _AdminAdminEventApplicationsPageState
               const SizedBox(height: 10),
               const Text(
                 'Alasan penolakan:',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
               Text(rejectionReason),
@@ -680,14 +773,18 @@ class _AdminAdminEventApplicationsPageState
                     child: OutlinedButton.icon(
                       onPressed: _isSubmitting
                           ? null
-                          : () => _rejectApplication(application),
+                          : () => _rejectApplication(
+                                application,
+                              ),
                       icon: const Icon(
                         Icons.close,
                         color: Colors.red,
                       ),
                       label: const Text(
                         'Tolak',
-                        style: TextStyle(color: Colors.red),
+                        style: TextStyle(
+                          color: Colors.red,
+                        ),
                       ),
                     ),
                   ),
@@ -696,7 +793,9 @@ class _AdminAdminEventApplicationsPageState
                     child: ElevatedButton.icon(
                       onPressed: _isSubmitting
                           ? null
-                          : () => _confirmApproval(application),
+                          : () => _confirmApproval(
+                                application,
+                              ),
                       icon: const Icon(Icons.check),
                       label: const Text('Setujui'),
                     ),
@@ -718,7 +817,10 @@ class _AdminAdminEventApplicationsPageState
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
     } else {
-      Navigator.pushReplacementNamed(context, '/admin');
+      Navigator.pushReplacementNamed(
+        context,
+        '/admin',
+      );
     }
   }
 
@@ -733,20 +835,18 @@ class _AdminAdminEventApplicationsPageState
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-
-        // Tombol kembali
         leading: IconButton(
           tooltip: 'Kembali',
           icon: const Icon(Icons.arrow_back),
           onPressed: _goBack,
         ),
-
         title: const Text('Persetujuan Admin Event'),
-
         actions: [
           IconButton(
             tooltip: 'Muat ulang',
-            onPressed: _isLoading ? null : _loadApplications,
+            onPressed: _isLoading
+                ? null
+                : _loadApplications,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -754,28 +854,48 @@ class _AdminAdminEventApplicationsPageState
 
       body: Column(
         children: [
-          // Tombol buat akun Admin Event
+          // ==================================================
+          // CREATE ADMIN EVENT BUTTON
+          // ==================================================
+
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              4,
+            ),
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _isSubmitting
                     ? null
                     : _showCreateAdminEventDialog,
-                icon: const Icon(Icons.person_add_alt_1),
-                label: const Text('Buat Akun Admin Event'),
+                icon: const Icon(
+                  Icons.person_add_alt_1,
+                ),
+                label: const Text(
+                  'Buat Akun Admin Event',
+                ),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 13,
+                  ),
                 ),
               ),
             ),
           ),
 
-          // Filter status
+          // ==================================================
+          // STATUS FILTER
+          // ==================================================
+
           _buildStatusFilter(),
 
-          // Daftar pengajuan
+          // ==================================================
+          // APPLICATION LIST
+          // ==================================================
+
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -806,8 +926,11 @@ class _AdminAdminEventApplicationsPageState
                     : RefreshIndicator(
                         onRefresh: _loadApplications,
                         child: ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(bottom: 20),
+                          physics:
+                              const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(
+                            bottom: 20,
+                          ),
                           itemCount: applications.length,
                           itemBuilder: (context, index) {
                             return _buildApplicationCard(

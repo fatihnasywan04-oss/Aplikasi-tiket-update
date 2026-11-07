@@ -14,6 +14,7 @@ class AdminOrdersPage extends StatefulWidget {
 class _AdminOrdersPageState extends State<AdminOrdersPage> {
   bool _loading = true;
   String? _error;
+
   List<dynamic> _orders = [];
 
   @override
@@ -22,7 +23,13 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     _load();
   }
 
+  // ============================================================
+  // LOAD ORDERS
+  // ============================================================
+
   Future<void> _load() async {
+    if (!mounted) return;
+
     setState(() {
       _loading = true;
       _error = null;
@@ -44,12 +51,34 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       });
     } finally {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+        });
       }
     }
   }
 
-  String _value(Map<String, dynamic> item, List<String> keys) {
+  // ============================================================
+  // RESPONSE HELPERS
+  // ============================================================
+
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+
+    return {};
+  }
+
+  String _value(
+    Map<String, dynamic> item,
+    List<String> keys, {
+    String fallback = '-',
+  }) {
     for (final key in keys) {
       final value = item[key];
 
@@ -58,13 +87,118 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       }
     }
 
-    return '-';
+    return fallback;
   }
 
-  String _formatRupiah(dynamic value) {
-    final number = num.tryParse(value?.toString() ?? '');
+  String _nestedValue(
+    Map<String, dynamic> item, {
+    required String objectKey,
+    required List<String> keys,
+    String fallback = '-',
+  }) {
+    final nested = _asMap(item[objectKey]);
 
-    if (number == null) return value?.toString() ?? '0';
+    return _value(
+      nested,
+      keys,
+      fallback: fallback,
+    );
+  }
+
+  String _orderId(Map<String, dynamic> order) {
+    return _value(order, ['id', 'order_id']);
+  }
+
+  String _eventTitle(Map<String, dynamic> order) {
+    final direct = _value(
+      order,
+      ['event_title', 'event_name', 'title'],
+      fallback: '',
+    );
+
+    if (direct.isNotEmpty) return direct;
+
+    return _nestedValue(
+      order,
+      objectKey: 'event',
+      keys: ['title', 'name', 'event_title'],
+    );
+  }
+
+  String _username(Map<String, dynamic> order) {
+    final direct = _value(
+      order,
+      ['username', 'user_name', 'customer_name', 'name'],
+      fallback: '',
+    );
+
+    if (direct.isNotEmpty) return direct;
+
+    return _nestedValue(
+      order,
+      objectKey: 'user',
+      keys: ['name', 'username', 'full_name'],
+    );
+  }
+
+  String _ticketClassName(Map<String, dynamic> order) {
+    final direct = _value(
+      order,
+      [
+        'ticket_class_name',
+        'ticket_name',
+        'class_name',
+      ],
+      fallback: '',
+    );
+
+    if (direct.isNotEmpty) return direct;
+
+    return _nestedValue(
+      order,
+      objectKey: 'ticket_class',
+      keys: ['name', 'ticket_class_name'],
+    );
+  }
+
+  String _quantity(Map<String, dynamic> order) {
+    return _value(
+      order,
+      ['quantity', 'ticket_quantity'],
+      fallback: '0',
+    );
+  }
+
+  String _orderStatus(Map<String, dynamic> order) {
+    return _value(
+      order,
+      ['status', 'order_status'],
+      fallback: 'unknown',
+    ).toLowerCase().trim();
+  }
+
+  String _createdAt(Map<String, dynamic> order) {
+    return _value(
+      order,
+      ['created_at', 'order_date', 'created'],
+      fallback: '',
+    );
+  }
+
+  // ============================================================
+  // CURRENCY FORMAT
+  // ============================================================
+
+  String _formatRupiah(dynamic value) {
+    if (value == null) return '0';
+
+    final number = num.tryParse(
+      value.toString().replaceAll(',', '.'),
+    );
+
+    if (number == null) {
+      return value.toString();
+    }
 
     final digits = number.round().toString();
     final buffer = StringBuffer();
@@ -79,6 +213,43 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
 
     return buffer.toString();
   }
+
+  String _orderTotal(Map<String, dynamic> order) {
+    final value = order['total_price'] ??
+        order['total'] ??
+        order['amount'];
+
+    return _formatRupiah(value);
+  }
+
+  // ============================================================
+  // DATE FORMAT
+  // ============================================================
+
+  String _formatDate(String value) {
+    if (value.trim().isEmpty || value == '-') {
+      return '-';
+    }
+
+    final date = DateTime.tryParse(value);
+
+    if (date == null) return value;
+
+    final localDate = date.toLocal();
+
+    final day = localDate.day.toString().padLeft(2, '0');
+    final month = localDate.month.toString().padLeft(2, '0');
+    final year = localDate.year.toString();
+
+    final hour = localDate.hour.toString().padLeft(2, '0');
+    final minute = localDate.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/$year $hour:$minute';
+  }
+
+  // ============================================================
+  // STATUS
+  // ============================================================
 
   Color _statusColor(String status) {
     final normalized = status.toLowerCase().trim();
@@ -120,6 +291,36 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     return AppColors.textMuted;
   }
 
+  String _statusLabel(String status) {
+    switch (status.toLowerCase().trim()) {
+      case 'paid':
+        return 'LUNAS';
+      case 'success':
+      case 'successful':
+        return 'BERHASIL';
+      case 'completed':
+        return 'SELESAI';
+      case 'confirmed':
+        return 'DIKONFIRMASI';
+      case 'pending':
+        return 'MENUNGGU PEMBAYARAN';
+      case 'waiting':
+      case 'waiting_payment':
+        return 'MENUNGGU';
+      case 'cancelled':
+      case 'canceled':
+        return 'DIBATALKAN';
+      case 'failed':
+        return 'GAGAL';
+      case 'expired':
+        return 'KEDALUWARSA';
+      case 'rejected':
+        return 'DITOLAK';
+      default:
+        return status.replaceAll('_', ' ').toUpperCase();
+    }
+  }
+
   Widget _buildStatusChip(String status) {
     final color = _statusColor(status);
 
@@ -136,16 +337,21 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
         ),
       ),
       child: Text(
-        status.replaceAll('_', ' ').toUpperCase(),
+        _statusLabel(status),
+        textAlign: TextAlign.center,
         style: TextStyle(
           color: color,
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.bold,
-          letterSpacing: 0.4,
+          letterSpacing: 0.3,
         ),
       ),
     );
   }
+
+  // ============================================================
+  // INFO ROW
+  // ============================================================
 
   Widget _buildInfoRow({
     required IconData icon,
@@ -188,35 +394,20 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     );
   }
 
+  // ============================================================
+  // ORDER CARD
+  // ============================================================
+
   Widget _buildOrderCard(Map<String, dynamic> order) {
-    final eventTitle = _value(
-      order,
-      ['event_title', 'event_name', 'title'],
-    );
+    final eventTitle = _eventTitle(order);
+    final orderId = _orderId(order);
+    final username = _username(order);
+    final ticketClass = _ticketClassName(order);
+    final quantity = _quantity(order);
+    final total = _orderTotal(order);
+    final status = _orderStatus(order);
 
-    final orderId = _value(
-      order,
-      ['id', 'order_id'],
-    );
-
-    final username = _value(
-      order,
-      ['username', 'user_name', 'customer_name'],
-    );
-
-    final quantity = _value(
-      order,
-      ['quantity', 'ticket_quantity'],
-    );
-
-    final total = _formatRupiah(
-      order['total_price'] ?? order['total'] ?? order['amount'],
-    );
-
-    final status = _value(
-      order,
-      ['status', 'order_status'],
-    );
+    final createdAt = _createdAt(order);
 
     return Card(
       elevation: 0,
@@ -276,23 +467,44 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                 ),
               ],
             ),
+
             const SizedBox(height: 18),
+
             Divider(
               height: 1,
               color: AppColors.border.withValues(alpha: 0.8),
             ),
+
             const SizedBox(height: 15),
+
             _buildInfoRow(
               icon: Icons.person_outline_rounded,
               label: 'Pengguna',
               value: username,
             ),
+
             _buildInfoRow(
               icon: Icons.confirmation_number_outlined,
               label: 'Jumlah tiket',
               value: quantity,
             ),
+
+            if (ticketClass != '-') 
+              _buildInfoRow(
+                icon: Icons.local_activity_outlined,
+                label: 'Kelas tiket',
+                value: ticketClass,
+              ),
+
+            if (createdAt.isNotEmpty)
+              _buildInfoRow(
+                icon: Icons.calendar_today_outlined,
+                label: 'Tanggal',
+                value: _formatDate(createdAt),
+              ),
+
             const SizedBox(height: 5),
+
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
@@ -330,7 +542,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                 ],
               ),
             ),
+
             const SizedBox(height: 14),
+
             Row(
               children: [
                 const Icon(
@@ -348,7 +562,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                     ),
                   ),
                 ),
-                _buildStatusChip(status),
+                Flexible(
+                  child: _buildStatusChip(status),
+                ),
               ],
             ),
           ],
@@ -356,6 +572,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       ),
     );
   }
+    // ============================================================
+  // ERROR STATE
+  // ============================================================
 
   Widget _buildErrorState() {
     return Center(
@@ -399,6 +618,10 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     );
   }
 
+  // ============================================================
+  // EMPTY STATE
+  // ============================================================
+
   Widget _buildEmptyState() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -424,6 +647,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
         Center(
           child: Text(
             'Pesanan yang masuk akan ditampilkan di sini.',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textMuted,
               fontSize: 13,
@@ -434,10 +658,15 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+
       appBar: AppBar(
         title: const Text(
           'Data Pesanan',
@@ -460,9 +689,11 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
           ),
         ],
       ),
+
       drawer: const AdminDrawerPage(
         currentRoute: '/admin/orders',
       ),
+
       body: _loading
           ? const Center(
               child: CircularProgressIndicator(
@@ -483,7 +714,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                       color: AppColors.gold,
                       backgroundColor: AppColors.surface,
                       child: ListView.separated(
-                        physics: const AlwaysScrollableScrollPhysics(),
+                        physics:
+                            const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(
                           16,
                           16,
@@ -494,9 +726,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                         separatorBuilder: (_, _) =>
                             const SizedBox(height: 12),
                         itemBuilder: (context, index) {
-                          final order = Map<String, dynamic>.from(
-                            _orders[index] as Map,
-                          );
+                          final order = _asMap(_orders[index]);
 
                           return _buildOrderCard(order);
                         },

@@ -21,8 +21,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
-  late final TextEditingController _priceController;
-  late final TextEditingController _stockController;
   late final TextEditingController _instagramController;
 
   DateTime? _eventDate;
@@ -30,33 +28,47 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
 
   bool get _isEdit => widget.event != null;
 
+  String _readEventValue(List<String> keys) {
+    final event = widget.event ?? {};
+
+    for (final key in keys) {
+      final value = event[key];
+
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+
+    return '';
+  }
+
   @override
   void initState() {
     super.initState();
 
-    final event = widget.event ?? {};
-
     _nameController = TextEditingController(
-      text: event['name']?.toString() ?? '',
-    );
-    _descriptionController = TextEditingController(
-      text: event['description']?.toString() ?? '',
-    );
-    _locationController = TextEditingController(
-      text: event['location']?.toString() ?? '',
-    );
-    _priceController = TextEditingController(
-      text: event['price']?.toString() ?? '',
-    );
-    _stockController = TextEditingController(
-      text: event['available_tickets']?.toString() ?? '',
-    );
-    _instagramController = TextEditingController(
-      text: event['instagram_username']?.toString() ?? '',
+      text: _readEventValue(['name', 'title']),
     );
 
-    if (event['event_date'] != null) {
-      _eventDate = DateTime.tryParse(event['event_date'].toString());
+    _descriptionController = TextEditingController(
+      text: _readEventValue(['description']),
+    );
+
+    _locationController = TextEditingController(
+      text: _readEventValue(['location', 'venue']),
+    );
+
+    _instagramController = TextEditingController(
+      text: _readEventValue(['instagram_username']),
+    );
+
+    final dateValue = _readEventValue([
+      'event_date',
+      'start_date',
+    ]);
+
+    if (dateValue.isNotEmpty) {
+      _eventDate = DateTime.tryParse(dateValue);
     }
   }
 
@@ -65,22 +77,31 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
     _nameController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
-    _priceController.dispose();
-    _stockController.dispose();
     _instagramController.dispose();
     super.dispose();
   }
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final currentDate = _eventDate ?? today;
+
+    final firstDate = currentDate.isBefore(today)
+        ? currentDate
+        : today;
+
     final selected = await showDatePicker(
       context: context,
-      initialDate: _eventDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
+      initialDate: currentDate,
+      firstDate: firstDate,
       lastDate: DateTime(2100),
     );
 
-    if (selected != null) {
-      setState(() => _eventDate = selected);
+    if (selected != null && mounted) {
+      setState(() {
+        _eventDate = selected;
+      });
     }
   }
 
@@ -88,7 +109,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
     String label,
     TextEditingController controller, {
     int maxLines = 1,
-    TextInputType keyboardType = TextInputType.text,
     bool required = true,
   }) {
     return Padding(
@@ -96,7 +116,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
       child: TextFormField(
         controller: controller,
         maxLines: maxLines,
-        keyboardType: keyboardType,
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
           labelText: label,
@@ -106,15 +125,9 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
           border: const OutlineInputBorder(),
         ),
         validator: (value) {
-          if (required && (value == null || value.trim().isEmpty)) {
+          if (required &&
+              (value == null || value.trim().isEmpty)) {
             return '$label wajib diisi';
-          }
-
-          if (keyboardType == TextInputType.number &&
-              value != null &&
-              value.trim().isNotEmpty &&
-              num.tryParse(value.trim()) == null) {
-            return '$label harus berupa angka';
           }
 
           return null;
@@ -124,30 +137,40 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
   }
 
   Future<void> _save() async {
+    if (_loading) return;
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_eventDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih tanggal event terlebih dahulu.')),
+        const SnackBar(
+          content: Text('Pilih tanggal event terlebih dahulu.'),
+        ),
       );
       return;
     }
 
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+    });
 
     try {
       final data = <String, dynamic>{
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'location': _locationController.text.trim(),
-        'price': double.parse(_priceController.text.trim()),
-        'available_tickets': int.parse(_stockController.text.trim()),
-        'event_date': _eventDate!.toIso8601String(),
+        'event_date': DateTime(
+          _eventDate!.year,
+          _eventDate!.month,
+          _eventDate!.day,
+        ).toIso8601String(),
         'instagram_username': _instagramController.text.trim(),
       };
 
       if (_isEdit) {
-        final eventId = int.tryParse(widget.event!['id'].toString());
+        final eventId = int.tryParse(
+          _readEventValue(['id', 'event_id']),
+        );
 
         if (eventId == null) {
           throw Exception('ID event tidak valid.');
@@ -165,7 +188,7 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
           content: Text(
             _isEdit
                 ? 'Permintaan perubahan event berhasil dikirim.'
-                : 'Event berhasil dibuat dan dikirim untuk persetujuan.',
+                : 'Event berhasil dibuat dan menunggu persetujuan Super Admin.',
           ),
         ),
       );
@@ -175,10 +198,16 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan event: $e')),
+        SnackBar(
+          content: Text('Gagal menyimpan event: $e'),
+        ),
       );
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -187,7 +216,9 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: Text(_isEdit ? 'Ajukan Perubahan Event' : 'Buat Event'),
+        title: Text(
+          _isEdit ? 'Ajukan Perubahan Event' : 'Buat Event',
+        ),
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.text,
       ),
@@ -196,46 +227,115 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (_isEdit)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
-                child: Text(
-                  'Perubahan akan menunggu persetujuan Super Admin.',
-                  style: TextStyle(color: Colors.white70),
+            Container(
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppTheme.primary.withValues(
+                    alpha: 0.5,
+                  ),
                 ),
               ),
-            _field('Nama Event', _nameController),
+              child: Text(
+                _isEdit
+                    ? 'Perubahan event akan dikirim kepada Super Admin '
+                        'dan baru diterapkan setelah disetujui.'
+                    : 'Event yang dibuat akan berstatus menunggu persetujuan '
+                        'Super Admin sebelum ditampilkan kepada pengguna.',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+
+            _field(
+              'Nama Event',
+              _nameController,
+            ),
+
             _field(
               'Deskripsi',
               _descriptionController,
               maxLines: 4,
             ),
-            _field('Lokasi', _locationController),
+
             _field(
-              'Harga',
-              _priceController,
-              keyboardType: TextInputType.number,
+              'Lokasi',
+              _locationController,
             ),
-            _field(
-              'Jumlah Tiket',
-              _stockController,
-              keyboardType: TextInputType.number,
-            ),
+
             _field(
               'Username Instagram (opsional)',
               _instagramController,
               required: false,
             ),
+
+            const SizedBox(height: 4),
+
+            const Text(
+              'Tanggal Event',
+              style: TextStyle(
+                color: Colors.white70,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
             OutlinedButton.icon(
-              onPressed: _pickDate,
+              onPressed: _loading ? null : _pickDate,
               icon: const Icon(Icons.calendar_month),
               label: Text(
                 _eventDate == null
                     ? 'Pilih Tanggal Event'
-                    : '${_eventDate!.day}/${_eventDate!.month}/${_eventDate!.year}',
+                    : '${_eventDate!.day.toString().padLeft(2, '0')}/'
+                        '${_eventDate!.month.toString().padLeft(2, '0')}/'
+                        '${_eventDate!.year}',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.all(15),
               ),
             ),
-            const SizedBox(height: 20),
+
+            const SizedBox(height: 14),
+
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.confirmation_number_outlined,
+                    color: Colors.white70,
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Harga tiket dan jumlah stok dikelola melalui '
+                      'menu Kelas Tiket setelah event dibuat. '
+                      'Perubahan kelas tiket juga memerlukan persetujuan '
+                      'Super Admin.',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 22),
+
             ElevatedButton(
               onPressed: _loading ? null : _save,
               style: ElevatedButton.styleFrom(
@@ -244,8 +344,19 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
                 padding: const EdgeInsets.all(15),
               ),
               child: _loading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : Text(_isEdit ? 'Kirim Perubahan' : 'Buat Event'),
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Text(
+                      _isEdit
+                          ? 'Kirim Permintaan Perubahan'
+                          : 'Buat Event',
+                    ),
             ),
           ],
         ),

@@ -8,6 +8,8 @@ import 'api_service.dart';
 import 'core/app_theme.dart';
 
 import 'screens/auth/login_page.dart';
+
+// Super Admin
 import 'screens/admin/admin_dashboard_page.dart';
 import 'screens/admin/admin_admin_event_applications_page.dart';
 import 'screens/admin/admin_payments_page.dart';
@@ -15,7 +17,15 @@ import 'screens/admin/admin_reports_page.dart';
 import 'screens/admin/admin_orders_page.dart';
 import 'screens/admin/admin_events_page.dart';
 
+// Admin Event
 import 'screens/admin_event/admin_event_dashboard_page.dart';
+import 'screens/admin_event/admin_event_events_page.dart';
+import 'screens/admin_event/admin_event_reports_page.dart';
+import 'screens/admin_event/admin_event_requests_page.dart';
+import 'screens/admin_event/admin_event_orders_page.dart';
+import 'screens/admin_event/admin_event_payments_page.dart';
+
+// User
 import 'screens/user/user_shell.dart';
 
 import 'widgets/app_error_view.dart';
@@ -43,12 +53,57 @@ Future<void> main() async {
 class EventTicketersApp extends StatelessWidget {
   const EventTicketersApp({super.key});
 
+  Widget _eventArgumentError(String pageName) {
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        title: Text(pageName),
+        backgroundColor: AppTheme.background,
+        foregroundColor: Colors.white,
+      ),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Event belum dipilih. Silakan buka halaman ini '
+            'melalui detail event terlebih dahulu.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  int? _readEventId(RouteSettings settings) {
+    final arguments = settings.arguments;
+
+    if (arguments is int) {
+      return arguments;
+    }
+
+    if (arguments is Map) {
+      final value = arguments['eventId'] ??
+          arguments['event_id'];
+
+      if (value is int) {
+        return value;
+      }
+
+      return int.tryParse(value?.toString() ?? '');
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Hikari',
       debugShowCheckedModeBanner: false,
-
       theme: AppTheme.dark,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
@@ -73,25 +128,74 @@ class EventTicketersApp extends StatelessWidget {
         '/admin/reports': (_) =>
             const AdminReportsPage(),
 
-        // Admin Orders
         '/admin/orders': (_) =>
             const AdminOrdersPage(),
 
-        // Admin Events
         '/admin/events': (_) =>
             const AdminEventsPage(),
 
-        // Admin Event / Organizer
+        // Admin Event
         '/admin-event': (_) =>
             const AdminEventDashboardPage(),
+
+        '/admin-event/events': (_) =>
+            const AdminEventEventsPage(),
+
+        '/admin-event/reports': (_) =>
+            const AdminEventReportsPage(),
+
+        '/admin-event/requests': (_) =>
+            const AdminEventRequestsPage(),
       },
 
       // Video pembuka tetap menjadi halaman pertama.
       home: const VideoIntroPage(),
+
+      // Route yang membutuhkan eventId.
+      onGenerateRoute: (settings) {
+        if (settings.name == '/admin-event/orders') {
+          final eventId = _readEventId(settings);
+
+          if (eventId == null) {
+            return MaterialPageRoute<void>(
+              builder: (_) =>
+                  _eventArgumentError('Pesanan Event'),
+              settings: settings,
+            );
+          }
+
+          return MaterialPageRoute<void>(
+            builder: (_) => AdminEventOrdersPage(
+              eventId: eventId,
+            ),
+            settings: settings,
+          );
+        }
+
+        if (settings.name == '/admin-event/payments') {
+          final eventId = _readEventId(settings);
+
+          if (eventId == null) {
+            return MaterialPageRoute<void>(
+              builder: (_) =>
+                  _eventArgumentError('Pembayaran Event'),
+              settings: settings,
+            );
+          }
+
+          return MaterialPageRoute<void>(
+            builder: (_) => AdminEventPaymentsPage(
+              eventId: eventId,
+            ),
+            settings: settings,
+          );
+        }
+
+        return null;
+      },
     );
   }
 }
-
 // ============================================================
 // APP ENTRY
 // ============================================================

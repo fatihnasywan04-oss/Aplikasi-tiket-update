@@ -8,12 +8,14 @@ class AdminPaymentsPage extends StatefulWidget {
   const AdminPaymentsPage({super.key});
 
   @override
-  State<AdminPaymentsPage> createState() => _AdminPaymentsPageState();
+  State<AdminPaymentsPage> createState() =>
+      _AdminPaymentsPageState();
 }
 
 class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
   bool _loading = true;
   String? _error;
+
   List<dynamic> _payments = [];
 
   @override
@@ -22,7 +24,13 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
     _load();
   }
 
+  // ============================================================
+  // LOAD PAYMENTS
+  // ============================================================
+
   Future<void> _load() async {
+    if (!mounted) return;
+
     setState(() {
       _loading = true;
       _error = null;
@@ -44,12 +52,34 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
       });
     } finally {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+        });
       }
     }
   }
 
-  String _value(Map<String, dynamic> item, List<String> keys) {
+  // ============================================================
+  // RESPONSE HELPERS
+  // ============================================================
+
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+
+    return {};
+  }
+
+  String _value(
+    Map<String, dynamic> item,
+    List<String> keys, {
+    String fallback = '-',
+  }) {
     for (final key in keys) {
       final value = item[key];
 
@@ -58,13 +88,115 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
       }
     }
 
-    return '-';
+    return fallback;
   }
 
-  String _formatRupiah(dynamic value) {
-    final number = num.tryParse(value?.toString() ?? '');
+  String _nestedValue(
+    Map<String, dynamic> item, {
+    required String objectKey,
+    required List<String> keys,
+    String fallback = '-',
+  }) {
+    final nested = _asMap(item[objectKey]);
 
-    if (number == null) return value?.toString() ?? '0';
+    return _value(
+      nested,
+      keys,
+      fallback: fallback,
+    );
+  }
+
+  String _paymentId(Map<String, dynamic> payment) {
+    return _value(
+      payment,
+      ['id', 'payment_id'],
+    );
+  }
+
+  String _orderId(Map<String, dynamic> payment) {
+    final direct = _value(
+      payment,
+      ['order_id'],
+      fallback: '',
+    );
+
+    if (direct.isNotEmpty) return direct;
+
+    return _nestedValue(
+      payment,
+      objectKey: 'order',
+      keys: ['id', 'order_id'],
+    );
+  }
+
+  String _paymentMethod(Map<String, dynamic> payment) {
+    final method = _value(
+      payment,
+      ['method', 'payment_method', 'method_name'],
+      fallback: '',
+    );
+
+    if (method.isNotEmpty) return method;
+
+    return _nestedValue(
+      payment,
+      objectKey: 'payment',
+      keys: ['method', 'payment_method'],
+    );
+  }
+
+  String _paymentStatus(Map<String, dynamic> payment) {
+    return _value(
+      payment,
+      ['status', 'payment_status'],
+      fallback: 'unknown',
+    ).toLowerCase().trim();
+  }
+
+  String _transactionId(Map<String, dynamic> payment) {
+    return _value(
+      payment,
+      ['transaction_id', 'reference_id', 'reference'],
+    );
+  }
+
+  String _paymentProvider(Map<String, dynamic> payment) {
+    return _value(
+      payment,
+      ['payment_provider', 'provider', 'gateway'],
+    );
+  }
+
+  String _createdAt(Map<String, dynamic> payment) {
+    return _value(
+      payment,
+      ['created_at', 'payment_date', 'created'],
+      fallback: '',
+    );
+  }
+
+  String _paidAt(Map<String, dynamic> payment) {
+    return _value(
+      payment,
+      ['paid_at', 'confirmed_at', 'settled_at'],
+      fallback: '',
+    );
+  }
+
+  // ============================================================
+  // CURRENCY FORMAT
+  // ============================================================
+
+  String _formatRupiah(dynamic value) {
+    if (value == null) return '0';
+
+    final number = num.tryParse(
+      value.toString().replaceAll(',', '.'),
+    );
+
+    if (number == null) {
+      return value.toString();
+    }
 
     final digits = number.round().toString();
     final buffer = StringBuffer();
@@ -79,6 +211,78 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
 
     return buffer.toString();
   }
+
+  String _paymentAmount(Map<String, dynamic> payment) {
+    final value = payment['amount'] ??
+        payment['total'] ??
+        payment['total_amount'];
+
+    return _formatRupiah(value);
+  }
+
+  // ============================================================
+  // DATE FORMAT
+  // ============================================================
+
+  String _formatDate(String value) {
+    if (value.trim().isEmpty || value == '-') {
+      return '-';
+    }
+
+    final date = DateTime.tryParse(value);
+
+    if (date == null) return value;
+
+    final localDate = date.toLocal();
+
+    final day = localDate.day.toString().padLeft(2, '0');
+    final month = localDate.month.toString().padLeft(2, '0');
+    final year = localDate.year.toString();
+
+    final hour = localDate.hour.toString().padLeft(2, '0');
+    final minute = localDate.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/$year $hour:$minute';
+  }
+
+  // ============================================================
+  // PAYMENT METHOD LABEL
+  // ============================================================
+
+  String _methodLabel(String method) {
+    switch (method.toLowerCase().trim()) {
+      case 'transfer_bank':
+      case 'bank_transfer':
+      case 'transfer':
+        return 'Transfer Bank';
+
+      case 'e_wallet':
+      case 'ewallet':
+      case 'e-wallet':
+        return 'E-Wallet';
+
+      case 'qris':
+        return 'QRIS';
+
+      default:
+        if (method == '-') return '-';
+
+        return method
+            .replaceAll('_', ' ')
+            .replaceAll('-', ' ')
+            .split(' ')
+            .map(
+              (word) => word.isEmpty
+                  ? word
+                  : '${word[0].toUpperCase()}${word.substring(1)}',
+            )
+            .join(' ');
+    }
+  }
+
+  // ============================================================
+  // STATUS
+  // ============================================================
 
   Color _statusColor(String status) {
     final normalized = status.toLowerCase().trim();
@@ -120,6 +324,44 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
     return AppColors.textMuted;
   }
 
+  String _statusLabel(String status) {
+    switch (status.toLowerCase().trim()) {
+      case 'paid':
+      case 'success':
+      case 'successful':
+        return 'BERHASIL';
+
+      case 'completed':
+        return 'SELESAI';
+
+      case 'confirmed':
+        return 'DIKONFIRMASI';
+
+      case 'pending':
+        return 'MENUNGGU';
+
+      case 'waiting':
+      case 'waiting_payment':
+        return 'MENUNGGU PEMBAYARAN';
+
+      case 'failed':
+        return 'GAGAL';
+
+      case 'expired':
+        return 'KEDALUWARSA';
+
+      case 'cancelled':
+      case 'canceled':
+        return 'DIBATALKAN';
+
+      case 'rejected':
+        return 'DITOLAK';
+
+      default:
+        return status.replaceAll('_', ' ').toUpperCase();
+    }
+  }
+
   Widget _buildStatusChip(String status) {
     final color = _statusColor(status);
 
@@ -136,43 +378,83 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
         ),
       ),
       child: Text(
-        status.replaceAll('_', ' ').toUpperCase(),
+        _statusLabel(status),
+        textAlign: TextAlign.center,
         style: TextStyle(
           color: color,
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.bold,
-          letterSpacing: 0.4,
+          letterSpacing: 0.3,
         ),
       ),
     );
   }
 
+  // ============================================================
+  // INFO ROW
+  // ============================================================
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 17,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(width: 9),
+          SizedBox(
+            width: 105,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // PAYMENT CARD
+  // ============================================================
+
   Widget _buildPaymentCard(Map<String, dynamic> payment) {
-    final paymentId = _value(
-      payment,
-      ['id', 'payment_id'],
+    final paymentId = _paymentId(payment);
+    final orderId = _orderId(payment);
+
+    final method = _methodLabel(
+      _paymentMethod(payment),
     );
 
-    final orderId = _value(
-      payment,
-      ['order_id'],
-    );
+    final amount = _paymentAmount(payment);
+    final status = _paymentStatus(payment);
 
-    final method = _value(
-      payment,
-      ['method', 'payment_method', 'method_name'],
-    );
+    final transactionId = _transactionId(payment);
+    final provider = _paymentProvider(payment);
 
-    final amount = _formatRupiah(
-      payment['amount'] ??
-          payment['total'] ??
-          payment['total_amount'],
-    );
-
-    final status = _value(
-      payment,
-      ['status', 'payment_status'],
-    );
+    final createdAt = _createdAt(payment);
+    final paidAt = _paidAt(payment);
 
     return Card(
       elevation: 0,
@@ -216,23 +498,58 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
                 ),
               ],
             ),
+
             const SizedBox(height: 18),
+
             Divider(
               height: 1,
               color: AppColors.border.withValues(alpha: 0.8),
             ),
+
             const SizedBox(height: 15),
+
             _buildInfoRow(
               icon: Icons.receipt_long_outlined,
               label: 'Pesanan',
               value: '#$orderId',
             ),
+
             _buildInfoRow(
               icon: Icons.account_balance_wallet_outlined,
               label: 'Metode',
               value: method,
             ),
+
+            if (provider != '-')
+              _buildInfoRow(
+                icon: Icons.business_outlined,
+                label: 'Provider',
+                value: provider,
+              ),
+
+            if (transactionId != '-')
+              _buildInfoRow(
+                icon: Icons.tag_outlined,
+                label: 'ID Transaksi',
+                value: transactionId,
+              ),
+
+            if (createdAt.isNotEmpty)
+              _buildInfoRow(
+                icon: Icons.calendar_today_outlined,
+                label: 'Dibuat',
+                value: _formatDate(createdAt),
+              ),
+
+            if (paidAt.isNotEmpty)
+              _buildInfoRow(
+                icon: Icons.check_circle_outline,
+                label: 'Dibayar',
+                value: _formatDate(paidAt),
+              ),
+
             const SizedBox(height: 5),
+
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
@@ -270,7 +587,9 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
                 ],
               ),
             ),
+
             const SizedBox(height: 14),
+
             Row(
               children: [
                 const Icon(
@@ -288,7 +607,9 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
                     ),
                   ),
                 ),
-                _buildStatusChip(status),
+                Flexible(
+                  child: _buildStatusChip(status),
+                ),
               ],
             ),
           ],
@@ -296,47 +617,9 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
       ),
     );
   }
-
-  Widget _buildInfoRow({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            size: 17,
-            color: AppColors.textMuted,
-          ),
-          const SizedBox(width: 9),
-          SizedBox(
-            width: 105,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.text,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    // ============================================================
+  // ERROR STATE
+  // ============================================================
 
   Widget _buildErrorState() {
     return Center(
@@ -380,6 +663,10 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
     );
   }
 
+  // ============================================================
+  // EMPTY STATE
+  // ============================================================
+
   Widget _buildEmptyState() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -405,6 +692,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
         Center(
           child: Text(
             'Data pembayaran akan ditampilkan di sini.',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textMuted,
               fontSize: 13,
@@ -415,10 +703,15 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
     );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+
       appBar: AppBar(
         title: const Text(
           'Data Pembayaran',
@@ -441,9 +734,11 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
           ),
         ],
       ),
+
       drawer: const AdminDrawerPage(
         currentRoute: '/admin/payments',
       ),
+
       body: _loading
           ? const Center(
               child: CircularProgressIndicator(
@@ -464,7 +759,8 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
                       color: AppColors.gold,
                       backgroundColor: AppColors.surface,
                       child: ListView.separated(
-                        physics: const AlwaysScrollableScrollPhysics(),
+                        physics:
+                            const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(
                           16,
                           16,
@@ -472,11 +768,11 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
                           24,
                         ),
                         itemCount: _payments.length,
-                        separatorBuilder: (_, index) =>
+                        separatorBuilder: (_, _) =>
                             const SizedBox(height: 12),
                         itemBuilder: (context, index) {
-                          final payment = Map<String, dynamic>.from(
-                            _payments[index] as Map,
+                          final payment = _asMap(
+                            _payments[index],
                           );
 
                           return _buildPaymentCard(payment);
