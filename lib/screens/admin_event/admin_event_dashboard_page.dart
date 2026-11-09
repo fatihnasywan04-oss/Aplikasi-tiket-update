@@ -22,12 +22,11 @@ class _AdminEventDashboardPageState
     _dashboardFuture = _loadDashboard();
   }
 
-  // Mengambil event, pesanan, dan pembayaran Admin Event.
   Future<Map<String, dynamic>> _loadDashboard() async {
     final results = await Future.wait([
       ApiService.getMyEvents(),
-      ApiService.getAdminOrders(),
-      ApiService.getAdminPayments(),
+      ApiService.getOrganizerOrders(),
+      ApiService.getOrganizerPayments(),
     ]);
 
     final events = results[0];
@@ -248,7 +247,8 @@ class _AdminEventDashboardPageState
       ),
     );
   }
-    Widget _buildDashboard(Map<String, dynamic> data) {
+
+  Widget _buildDashboard(Map<String, dynamic> data) {
     final totalEvents = _readNumber(data, 'total_events');
     final pendingEvents = _readNumber(data, 'pending_events');
     final approvedEvents = _readNumber(data, 'approved_events');
@@ -273,7 +273,6 @@ class _AdminEventDashboardPageState
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         children: [
-          // Header dashboard.
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
@@ -359,7 +358,6 @@ class _AdminEventDashboardPageState
 
           const SizedBox(height: 24),
 
-          // Status event.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -399,7 +397,6 @@ class _AdminEventDashboardPageState
 
           const SizedBox(height: 16),
 
-          // Status pesanan.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -439,7 +436,6 @@ class _AdminEventDashboardPageState
 
           const SizedBox(height: 16),
 
-          // Status pembayaran.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -479,7 +475,6 @@ class _AdminEventDashboardPageState
 
           const SizedBox(height: 20),
 
-          // Informasi persetujuan.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -529,10 +524,7 @@ class _AdminEventDashboardPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-
-      // Drawer Admin Event.
       drawer: const AdminEventDrawerPage(),
-
       appBar: AppBar(
         backgroundColor: AppTheme.background,
         title: const Text(
@@ -542,7 +534,6 @@ class _AdminEventDashboardPageState
           ),
         ),
       ),
-
       body: FutureBuilder<Map<String, dynamic>>(
         future: _dashboardFuture,
         builder: (context, snapshot) {

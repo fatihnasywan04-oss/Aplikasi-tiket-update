@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -580,7 +579,88 @@ class ApiService {
     final payload = Map<String, dynamic>.from(data);
 
     payload['instagram_username'] =
-        _normalizeInstagramUsername(payload['instagram_username']);
+        _normalizeInstagramUsername(
+      payload['instagram_username'],
+    );
+
+    if (payload.containsKey('ticket_classes')) {
+      final rawTicketClasses = payload['ticket_classes'];
+
+      if (rawTicketClasses is! List) {
+        throw Exception(
+          'Format kelas tiket tidak valid.',
+        );
+      }
+
+      final normalizedTicketClasses =
+          <Map<String, dynamic>>[];
+
+      final usedNames = <String>{};
+
+      for (final item in rawTicketClasses) {
+        if (item is! Map) {
+          throw Exception(
+            'Data kelas tiket tidak valid.',
+          );
+        }
+
+        final ticketClass =
+            Map<String, dynamic>.from(item);
+
+        final name =
+            ticketClass['name']?.toString().trim() ?? '';
+
+        if (name.isEmpty || name.length > 30) {
+          throw Exception(
+            'Nama kelas tiket wajib diisi dan maksimal 30 karakter.',
+          );
+        }
+
+        if (!usedNames.add(name.toLowerCase())) {
+          throw Exception(
+            'Nama kelas tiket tidak boleh sama.',
+          );
+        }
+
+        final rawPrice = ticketClass['price'];
+
+        final price = rawPrice is num
+            ? rawPrice
+            : num.tryParse(rawPrice?.toString() ?? '');
+
+        if (price == null ||
+            !price.isFinite ||
+            price < 0) {
+          throw Exception(
+            'Harga kelas tiket "$name" tidak valid.',
+          );
+        }
+
+        final rawStock =
+            ticketClass['available_tickets'];
+
+        final stock = rawStock is int
+            ? rawStock
+            : int.tryParse(
+                rawStock?.toString() ?? '',
+              );
+
+        if (stock == null || stock < 0) {
+          throw Exception(
+            'Stok kelas tiket "$name" tidak valid.',
+          );
+        }
+
+        normalizedTicketClasses.add({
+          'name': name,
+          'price': price,
+          'available_tickets': stock,
+        });
+      }
+
+      payload['ticket_classes'] =
+          normalizedTicketClasses;
+    }
 
     return payload;
   }
@@ -706,7 +786,6 @@ class ApiService {
     return _list(await _get('/events/'));
   }
 
-  // Mengambil event milik Admin Event, termasuk pending/rejected.
   static Future<List<Map<String, dynamic>>> getMyEvents() async {
     return _list(
       await _get(
@@ -729,11 +808,24 @@ class ApiService {
   static Future<Map<String, dynamic>> createEvent(
     Map<String, dynamic> data,
   ) async {
+    final payload = _normalizeEventPayload(data);
+
+    if (await isAdminEvent()) {
+      final ticketClasses = payload['ticket_classes'];
+
+      if (ticketClasses is! List ||
+          ticketClasses.isEmpty) {
+        throw Exception(
+          'Admin Event wajib menambahkan minimal satu kelas tiket.',
+        );
+      }
+    }
+
     return _unwrapMap(
       await _post(
         '/events/',
         headers: await _eventManagementHeaders(),
-        body: _normalizeEventPayload(data),
+        body: payload,
       ),
     );
   }
@@ -1126,6 +1218,10 @@ class ApiService {
     );
   }
 
+  // ============================================================
+  // ADMIN EVENT - ORDERS DAN PAYMENTS
+  // ============================================================
+
   static Future<List<Map<String, dynamic>>> getOrganizerOrders() async {
     return _list(
       await _get(
@@ -1145,10 +1241,14 @@ class ApiService {
     );
   }
 
+  // ============================================================
+  // SUPER ADMIN - ORDERS DAN PAYMENTS
+  // ============================================================
+
   static Future<List<Map<String, dynamic>>> getAdminOrders() async {
     return _list(
       await _get(
-        '/orders/admin/all',
+        '/admin/orders',
         headers: await _adminHeaders(),
       ),
     );
@@ -1158,6 +1258,19 @@ class ApiService {
     return _list(
       await _get(
         '/admin/payments',
+        headers: await _adminHeaders(),
+      ),
+    );
+  }
+
+  // ============================================================
+  // SUPER ADMIN - LAPORAN EVENT SELESAI
+  // ============================================================
+
+  static Future<Map<String, dynamic>> getAdminEventReports() async {
+    return _unwrapMap(
+      await _get(
+        '/admin/reports/events',
         headers: await _adminHeaders(),
       ),
     );

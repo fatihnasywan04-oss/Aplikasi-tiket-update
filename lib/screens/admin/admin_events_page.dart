@@ -272,7 +272,8 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     }
 
     try {
-      // Mengambil semua event pengelola, termasuk pending dan rejected.
+      // Mengambil event milik Admin Event,
+      // termasuk event pending, approved, dan rejected.
       final result = await ApiService.getMyEvents();
 
       if (!mounted) return;
@@ -303,7 +304,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     if (saved == true) {
       _message(
         event == null
-            ? 'Event dan kelas tiket berhasil ditambahkan.'
+            ? 'Event dan kelas tiket berhasil diajukan.'
             : 'Perubahan event berhasil diajukan/disimpan.',
       );
 
@@ -332,9 +333,9 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
         title: const Text('Hapus event?'),
         content: Text(
           'Apakah kamu yakin ingin menghapus "$title"?\n\n'
-          'Riwayat pesanan dan pembayaran harus tetap dipertahankan '
-          'oleh backend. Jika event memiliki transaksi, backend harus '
-          'menggunakan mekanisme soft-delete atau permintaan penghapusan.',
+          'Jika event memiliki transaksi, backend harus '
+          'menggunakan mekanisme soft-delete atau permintaan penghapusan '
+          'agar riwayat pesanan dan pembayaran tetap dipertahankan.',
         ),
         actions: [
           TextButton(
@@ -423,6 +424,12 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     final status = _approvalStatus(event);
     final statusColor = _approvalColor(event);
 
+    final rejectionReason = _value(
+      event,
+      ['approval_rejection_reason'],
+      fallback: '',
+    );
+
     return Card(
       elevation: 0,
       color: AppColors.surface,
@@ -491,6 +498,17 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                           ),
                         ),
                       ),
+                      if (status == 'Ditolak' &&
+                          rejectionReason.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Alasan: $rejectionReason',
+                          style: const TextStyle(
+                            color: AppColors.error,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                       if (isCancelled || isDeleted) ...[
                         const SizedBox(height: 6),
                         Text(
@@ -1023,8 +1041,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
-
-  Future<void> _pickEventImage() async {
+    Future<void> _pickEventImage() async {
     if (_saving) return;
 
     try {
@@ -1196,7 +1213,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       ticket.dispose();
     });
   }
-    @override
+
+  @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
@@ -1217,7 +1235,6 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
     final initial = _selectedDate ?? today.add(const Duration(days: 1));
 
-    // Saat edit, tanggal lampau tetap boleh dipertahankan.
     final firstDate = _isEditing ? DateTime(2000, 1, 1) : today;
 
     final picked = await showDatePicker(
@@ -1403,8 +1420,8 @@ class _EventFormDialogState extends State<_EventFormDialog> {
     num price;
     int totalStock = 0;
 
+    // Data kelas tiket hanya disertakan ketika membuat event baru.
     if (_isEditing) {
-      // Edit event tidak mengubah harga dan stok kelas tiket.
       price = _toNumFallback(widget.event);
     } else {
       if (_ticketClasses.isEmpty) {
@@ -1417,9 +1434,11 @@ class _EventFormDialogState extends State<_EventFormDialog> {
 
       for (final ticket in _ticketClasses) {
         final ticketName = ticket.nameController.text.trim();
+
         final ticketPrice = num.tryParse(
           ticket.priceController.text.trim(),
         );
+
         final ticketStock = int.tryParse(
           ticket.stockController.text.trim(),
         );
@@ -1493,42 +1512,30 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       };
 
       if (_isEditing) {
-        // Tidak mengirim price atau available_tickets ketika edit.
-        // Harga dan stok tetap dikelola pada kelas tiket.
+        // Edit event tetap mengikuti mekanisme update yang sudah ada.
+        // Harga dan stok kelas tiket tidak diubah melalui form ini.
         await ApiService.updateEvent(id!, payload);
       } else {
-        // Field price dan available_tickets tetap dikirim
-        // untuk kompatibilitas dengan EventCreate backend.
+        // Harga event = harga kelas tiket termurah.
+        // Stok event = total stok seluruh kelas tiket.
         payload['price'] = price;
         payload['available_tickets'] = totalStock;
 
-        final createdEvent = await ApiService.createEvent(payload);
-
-        final rawCreatedId =
-            createdEvent['id'] ?? createdEvent['event_id'];
-
-        final createdEventId = rawCreatedId is int
-            ? rawCreatedId
-            : int.tryParse(rawCreatedId?.toString() ?? '');
-
-        if (createdEventId == null || createdEventId <= 0) {
-          throw Exception(
-            'Respons server tidak berisi ID event yang valid. '
-            'Periksa daftar event sebelum mencoba menyimpan ulang.',
-          );
-        }
-
-        // Buat kelas tiket satu per satu.
-        for (final ticket in _ticketClasses) {
-          await ApiService.createTicketClass(
-            eventId: createdEventId,
-            name: ticket.nameController.text.trim(),
-            price: num.parse(ticket.priceController.text.trim()),
-            availableTickets: int.parse(
+        // Semua kelas tiket dikirim bersama event dalam satu request.
+        // Backend akan menyimpan event dan kelas tiket secara atomik.
+        payload['ticket_classes'] = _ticketClasses.map((ticket) {
+          return {
+            'name': ticket.nameController.text.trim(),
+            'price': num.parse(
+              ticket.priceController.text.trim(),
+            ),
+            'available_tickets': int.parse(
               ticket.stockController.text.trim(),
             ),
-          );
-        }
+          };
+        }).toList();
+
+        await ApiService.createEvent(payload);
       }
 
       if (!mounted) return;
@@ -1538,7 +1545,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
       if (!mounted) return;
 
       _message(
-        'Gagal ${_isEditing ? 'memperbarui event' : 'menyimpan event atau kelas tiket'}: '
+        'Gagal ${_isEditing ? 'memperbarui event' : 'menyimpan event'}: '
         '${e.toString().replaceFirst('Exception: ', '')}',
       );
     } finally {
@@ -1761,6 +1768,7 @@ class _EventFormDialogState extends State<_EventFormDialog> {
               controller: ticket.nameController,
               enabled: !_saving,
               textCapitalization: TextCapitalization.words,
+              maxLength: 30,
               style: const TextStyle(color: AppColors.text),
               decoration: const InputDecoration(
                 labelText: 'Nama tiket *',

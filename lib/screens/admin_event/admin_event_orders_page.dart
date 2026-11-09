@@ -1,8 +1,8 @@
-
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
+import 'admin_event_drawer_page.dart';
 
 class AdminEventOrdersPage extends StatefulWidget {
   final int eventId;
@@ -27,48 +27,46 @@ class _AdminEventOrdersPageState
     _future = _loadOrders();
   }
 
-  int? _toInt(dynamic value) {
-    if (value == null) return null;
+  int _toInt(dynamic value) {
     if (value is int) return value;
-    return int.tryParse(value.toString());
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  String _readValue(
-    Map<String, dynamic> data,
-    List<String> keys, {
-    String fallback = '-',
-  }) {
-    for (final key in keys) {
-      final value = data[key];
+  Map<String, dynamic> _readValue(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
 
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
     }
 
-    return fallback;
+    return {};
   }
 
-  int? _getOrderEventId(Map<String, dynamic> order) {
-    final directId = _toInt(
-      order['event_id'] ?? order['eventId'],
-    );
+  int _getOrderEventId(Map<String, dynamic> order) {
+    final directId = order['event_id'];
 
-    if (directId != null) return directId;
-
-    final event = order['event'];
-
-    if (event is Map) {
-      return _toInt(event['id'] ?? event['event_id']);
+    if (directId != null) {
+      return _toInt(directId);
     }
 
-    return null;
+    final event = _readValue(order['event']);
+
+    if (event['id'] != null) {
+      return _toInt(event['id']);
+    }
+
+    final ticketClass = _readValue(order['ticket_class']);
+
+    if (ticketClass['event_id'] != null) {
+      return _toInt(ticketClass['event_id']);
+    }
+
+    return 0;
   }
 
   Future<List<Map<String, dynamic>>> _loadOrders() async {
-    // Endpoint ini mendukung admin dan admin_event.
-    // Backend membatasi admin_event hanya pada event miliknya.
-    final orders = await ApiService.getAdminOrders();
+    final orders = await ApiService.getOrganizerOrders();
 
     return orders.where((order) {
       return _getOrderEventId(order) == widget.eventId;
@@ -76,228 +74,224 @@ class _AdminEventOrdersPageState
   }
 
   Future<void> _refresh() async {
-    final newFuture = _loadOrders();
+    final future = _loadOrders();
 
     setState(() {
-      _future = newFuture;
+      _future = future;
     });
 
     try {
-      await newFuture;
-    } catch (_) {
-      // Error ditampilkan oleh FutureBuilder.
+      await future;
+    } catch (e) {
+      debugPrint('Refresh orders error: $e');
     }
   }
 
   String _formatDate(dynamic value) {
-    if (value == null || value.toString().isEmpty) {
-      return '-';
+    if (value == null) return '-';
+
+    try {
+      final date = DateTime.parse(value.toString()).toLocal();
+
+      final day = date.day.toString().padLeft(2, '0');
+      final month = date.month.toString().padLeft(2, '0');
+      final year = date.year.toString();
+
+      final hour = date.hour.toString().padLeft(2, '0');
+      final minute = date.minute.toString().padLeft(2, '0');
+
+      return '$day/$month/$year $hour:$minute';
+    } catch (_) {
+      return value.toString();
     }
+  }
 
-    final date = DateTime.tryParse(value.toString());
+  String _formatCurrency(dynamic value) {
+    final amount = _toInt(value);
+    final formatted = amount.toString().replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (match) => '${match[1]}.',
+    );
 
-    if (date == null) return value.toString();
+    return 'Rp $formatted';
+  }
 
-    final localDate = date.toLocal();
-
-    return '${localDate.day.toString().padLeft(2, '0')}/'
-        '${localDate.month.toString().padLeft(2, '0')}/'
-        '${localDate.year} '
-        '${localDate.hour.toString().padLeft(2, '0')}:'
-        '${localDate.minute.toString().padLeft(2, '0')}';
+  String _orderStatus(Map<String, dynamic> order) {
+    return (order['status'] ??
+            order['order_status'] ??
+            'pending')
+        .toString()
+        .toLowerCase();
   }
 
   String _statusLabel(String status) {
-    switch (status.toLowerCase()) {
+    switch (status) {
+      case 'paid':
+        return 'Sudah Dibayar';
       case 'pending':
         return 'Menunggu Pembayaran';
-      case 'paid':
-        return 'Lunas';
-      case 'success':
-        return 'Berhasil';
       case 'cancelled':
       case 'canceled':
         return 'Dibatalkan';
-      case 'expired':
-        return 'Kedaluwarsa';
-      case 'failed':
-        return 'Gagal';
       default:
-        return status;
+        return status.toUpperCase();
     }
   }
 
   Color _statusColor(String status) {
-    switch (status.toLowerCase()) {
+    switch (status) {
       case 'paid':
-      case 'success':
         return Colors.green;
       case 'pending':
         return Colors.orange;
       case 'cancelled':
       case 'canceled':
-      case 'expired':
-      case 'failed':
         return Colors.redAccent;
       default:
-        return Colors.grey;
+        return Colors.blueGrey;
     }
   }
 
-  Widget _buildStatus(String status) {
+  Widget _buildOrderCard(Map<String, dynamic> order) {
+    final orderId = order['id'] ?? order['order_id'] ?? '-';
+    final status = _orderStatus(order);
+
+    final quantity = order['quantity'] ?? 0;
+    final totalPrice =
+        order['total_price'] ?? order['amount'] ?? 0;
+
+    final createdAt =
+        order['created_at'] ?? order['order_date'];
+
+    final user = _readValue(order['user']);
+    final ticketClass = _readValue(order['ticket_class']);
+
+    final userName = user['name'] ??
+        order['user_name'] ??
+        order['customer_name'] ??
+        'Pelanggan';
+
+    final ticketName = ticketClass['name'] ??
+        order['ticket_class_name'] ??
+        'Tiket';
+
     final color = _statusColor(status);
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 5,
-      ),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(17),
         border: Border.all(
-          color: color.withValues(alpha: 0.5),
+          color: Colors.white.withValues(alpha: 0.08),
         ),
       ),
-      child: Text(
-        _statusLabel(status),
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrderCard(Map<String, dynamic> order) {
-    final orderId = _readValue(
-      order,
-      ['id', 'order_id'],
-    );
-
-    final customerName = _readValue(
-      order,
-      ['username', 'user_name', 'customer_name', 'name'],
-      fallback: 'Pembeli',
-    );
-
-    final quantity = _readValue(
-      order,
-      ['quantity', 'ticket_quantity'],
-    );
-
-    final totalPrice = _readValue(
-      order,
-      ['total_price', 'total_amount', 'total', 'amount'],
-    );
-
-    final status = _readValue(
-      order,
-      ['status', 'order_status'],
-      fallback: 'pending',
-    );
-
-    final ticketClass = order['ticket_class'];
-
-    final ticketClassName = ticketClass is Map
-        ? _readValue(
-            ticketClass.cast<String, dynamic>(),
-            ['name'],
-          )
-        : _readValue(
-            order,
-            ['ticket_class_name', 'class_name'],
-          );
-
-    final createdAt = _readValue(
-      order,
-      ['created_at', 'createdAt', 'order_date'],
-    );
-
-    final event = order['event'];
-
-    final eventName = event is Map
-        ? _readValue(
-            event.cast<String, dynamic>(),
-            ['name', 'title'],
-          )
-        : _readValue(
-            order,
-            ['event_title', 'event_name'],
-            fallback: 'Event',
-          );
-
-    return Card(
-      color: AppTheme.surface,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.receipt_long,
-                  color: Colors.white70,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Pesanan #$orderId',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-                _buildStatus(status),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _detailRow('Pembeli', customerName),
-            _detailRow('Event', eventName),
-            _detailRow('Kelas Tiket', ticketClassName),
-            _detailRow('Jumlah Tiket', quantity),
-            _detailRow('Total Pembayaran', 'Rp $totalPrice'),
-            _detailRow('Tanggal Pesanan', _formatDate(createdAt)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 125,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Pesanan #$orderId',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _statusLabel(status),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 15),
+
+          _buildInfoRow(
+            Icons.person_outline,
+            'Pelanggan',
+            userName.toString(),
+          ),
+
+          _buildInfoRow(
+            Icons.confirmation_number_outlined,
+            'Kelas Tiket',
+            ticketName.toString(),
+          ),
+
+          _buildInfoRow(
+            Icons.shopping_bag_outlined,
+            'Jumlah Tiket',
+            quantity.toString(),
+          ),
+
+          _buildInfoRow(
+            Icons.payments_outlined,
+            'Total Pembayaran',
+            _formatCurrency(totalPrice),
+          ),
+
+          _buildInfoRow(
+            Icons.calendar_today_outlined,
+            'Tanggal Pesanan',
+            _formatDate(createdAt),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 17,
+            color: Colors.white54,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
             child: Text(
               label,
               style: const TextStyle(
-                color: Colors.white54,
+                color: Colors.white60,
                 fontSize: 12,
               ),
             ),
           ),
-          const Text(
-            ': ',
-            style: TextStyle(color: Colors.white54),
-          ),
-          Expanded(
+          const SizedBox(width: 10),
+          Flexible(
             child: Text(
               value,
+              textAlign: TextAlign.end,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -310,47 +304,19 @@ class _AdminEventOrdersPageState
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: const [
-        SizedBox(height: 150),
+        SizedBox(height: 130),
         Icon(
           Icons.receipt_long_outlined,
           color: Colors.white38,
-          size: 55,
+          size: 65,
         ),
-        SizedBox(height: 14),
+        SizedBox(height: 16),
         Center(
           child: Text(
             'Belum ada pesanan untuk event ini.',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildError(String error) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        const SizedBox(height: 120),
-        const Icon(
-          Icons.error_outline,
-          color: Colors.redAccent,
-          size: 45,
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: Text(
-            'Gagal memuat pesanan:\n$error',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Center(
-          child: OutlinedButton.icon(
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Coba Lagi'),
+            style: TextStyle(
+              color: Colors.white70,
+            ),
           ),
         ),
       ],
@@ -361,55 +327,123 @@ class _AdminEventOrdersPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+      drawer: const AdminEventDrawerPage(),
       appBar: AppBar(
-        title: const Text('Pesanan Event'),
-        backgroundColor: AppTheme.surface,
-        foregroundColor: AppTheme.text,
-        actions: [
-          IconButton(
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Muat ulang',
+        backgroundColor: AppTheme.background,
+        title: const Text(
+          'Pesanan Event',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 180),
-                  Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                ],
-              );
-            }
-
-            if (snapshot.hasError) {
-              return _buildError(snapshot.error.toString());
-            }
-
-            final orders = snapshot.data ?? [];
-
-            if (orders.isEmpty) {
-              return _buildEmpty();
-            }
-
-            return ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                return _buildOrderCard(orders[index]);
+        ),
+        leading: Builder(
+          builder: (context) {
+            return IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () {
+                Scaffold.of(context).openDrawer();
               },
             );
           },
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Kembali',
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              } else {
+                Navigator.pushReplacementNamed(
+                  context,
+                  '/admin-event',
+                );
+              }
+            },
+          ),
+          IconButton(
+            tooltip: 'Muat ulang',
+            icon: const Icon(Icons.refresh),
+            onPressed: _refresh,
+          ),
+        ],
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.redAccent,
+                      size: 45,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Gagal memuat data pesanan.',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      snapshot.error.toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Coba Lagi'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final orders = snapshot.data ?? [];
+
+          if (orders.isEmpty) {
+            return _buildEmpty();
+          }
+
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(18),
+              children: [
+                Text(
+                  'Total ${orders.length} pesanan',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                ...orders.map(_buildOrderCard),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

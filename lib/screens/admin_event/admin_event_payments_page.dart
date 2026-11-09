@@ -1,8 +1,8 @@
-
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
+import 'admin_event_drawer_page.dart';
 
 class AdminEventPaymentsPage extends StatefulWidget {
   final int eventId;
@@ -27,58 +27,58 @@ class _AdminEventPaymentsPageState
     _future = _loadPayments();
   }
 
-  int? _toInt(dynamic value) {
-    if (value == null) return null;
+  int _toInt(dynamic value) {
     if (value is int) return value;
-    return int.tryParse(value.toString());
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  String _readValue(
-    Map<String, dynamic> data,
-    List<String> keys, {
-    String fallback = '-',
-  }) {
-    for (final key in keys) {
-      final value = data[key];
+  Map<String, dynamic> _readValue(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
 
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
     }
 
-    return fallback;
+    return {};
   }
 
-  int? _getEventId(Map<String, dynamic> payment) {
-    final directId = _toInt(
-      payment['event_id'] ?? payment['eventId'],
-    );
+  int _getEventId(Map<String, dynamic> payment) {
+    final directEventId = payment['event_id'];
 
-    if (directId != null) return directId;
-
-    final order = payment['order'];
-
-    if (order is Map) {
-      final orderEventId = _toInt(
-        order['event_id'] ?? order['eventId'],
-      );
-
-      if (orderEventId != null) return orderEventId;
-
-      final event = order['event'];
-
-      if (event is Map) {
-        return _toInt(event['id'] ?? event['event_id']);
-      }
+    if (directEventId != null) {
+      return _toInt(directEventId);
     }
 
-    return null;
+    final event = _readValue(payment['event']);
+
+    if (event['id'] != null) {
+      return _toInt(event['id']);
+    }
+
+    final order = _readValue(payment['order']);
+
+    if (order['event_id'] != null) {
+      return _toInt(order['event_id']);
+    }
+
+    final nestedEvent = _readValue(order['event']);
+
+    if (nestedEvent['id'] != null) {
+      return _toInt(nestedEvent['id']);
+    }
+
+    final ticketClass = _readValue(order['ticket_class']);
+
+    if (ticketClass['event_id'] != null) {
+      return _toInt(ticketClass['event_id']);
+    }
+
+    return 0;
   }
 
   Future<List<Map<String, dynamic>>> _loadPayments() async {
-    // Endpoint pembayaran admin dan Admin Event.
-    // Backend harus membatasi Admin Event berdasarkan event miliknya.
-    final payments = await ApiService.getAdminPayments();
+    final payments = await ApiService.getOrganizerPayments();
 
     return payments.where((payment) {
       return _getEventId(payment) == widget.eventId;
@@ -86,58 +86,76 @@ class _AdminEventPaymentsPageState
   }
 
   Future<void> _refresh() async {
-    final newFuture = _loadPayments();
+    final future = _loadPayments();
 
     setState(() {
-      _future = newFuture;
+      _future = future;
     });
 
     try {
-      await newFuture;
-    } catch (_) {
-      // Error ditampilkan melalui FutureBuilder.
+      await future;
+    } catch (e) {
+      debugPrint('Refresh payments error: $e');
     }
+  }
+
+  String _formatCurrency(dynamic value) {
+    final amount = _toInt(value);
+
+    final formatted = amount.toString().replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (match) => '${match[1]}.',
+    );
+
+    return 'Rp $formatted';
   }
 
   String _formatDate(dynamic value) {
-    if (value == null || value.toString().isEmpty) {
-      return '-';
+    if (value == null) return '-';
+
+    try {
+      final date = DateTime.parse(value.toString()).toLocal();
+
+      final day = date.day.toString().padLeft(2, '0');
+      final month = date.month.toString().padLeft(2, '0');
+      final year = date.year.toString();
+
+      final hour = date.hour.toString().padLeft(2, '0');
+      final minute = date.minute.toString().padLeft(2, '0');
+
+      return '$day/$month/$year $hour:$minute';
+    } catch (_) {
+      return value.toString();
     }
+  }
 
-    final date = DateTime.tryParse(value.toString());
-
-    if (date == null) return value.toString();
-
-    final localDate = date.toLocal();
-
-    return '${localDate.day.toString().padLeft(2, '0')}/'
-        '${localDate.month.toString().padLeft(2, '0')}/'
-        '${localDate.year} '
-        '${localDate.hour.toString().padLeft(2, '0')}:'
-        '${localDate.minute.toString().padLeft(2, '0')}';
+  String _paymentStatus(Map<String, dynamic> payment) {
+    return (payment['payment_status'] ??
+            payment['status'] ??
+            'pending')
+        .toString()
+        .toLowerCase();
   }
 
   String _statusLabel(String status) {
-    switch (status.toLowerCase()) {
+    switch (status) {
       case 'success':
       case 'paid':
         return 'Berhasil';
       case 'pending':
-        return 'Menunggu Pembayaran';
+        return 'Menunggu';
       case 'failed':
         return 'Gagal';
       case 'cancelled':
       case 'canceled':
         return 'Dibatalkan';
-      case 'expired':
-        return 'Kedaluwarsa';
       default:
-        return status;
+        return status.toUpperCase();
     }
   }
 
   Color _statusColor(String status) {
-    switch (status.toLowerCase()) {
+    switch (status) {
       case 'success':
       case 'paid':
         return Colors.green;
@@ -146,82 +164,164 @@ class _AdminEventPaymentsPageState
       case 'failed':
       case 'cancelled':
       case 'canceled':
-      case 'expired':
         return Colors.redAccent;
       default:
-        return Colors.grey;
+        return Colors.blueGrey;
     }
   }
 
-  String _methodLabel(String method) {
-    switch (method.toLowerCase()) {
-      case 'transfer_bank':
-      case 'bank_transfer':
-      case 'transfer':
-        return 'Transfer Bank';
-      case 'e_wallet':
-      case 'ewallet':
-      case 'e-wallet':
-        return 'E-Wallet';
-      case 'qris':
-        return 'QRIS';
-      default:
-        return method;
+  String _paymentMethod(Map<String, dynamic> payment) {
+    final method = payment['payment_method'] ??
+        payment['payment_provider'] ??
+        payment['method'];
+
+    if (method == null || method.toString().isEmpty) {
+      return '-';
     }
+
+    return method.toString().replaceAll('_', ' ').toUpperCase();
   }
 
-  Widget _buildStatus(String status) {
+  Widget _buildPaymentCard(Map<String, dynamic> payment) {
+    final paymentId =
+        payment['id'] ?? payment['payment_id'] ?? '-';
+
+    final order = _readValue(payment['order']);
+
+    final orderId = payment['order_id'] ??
+        order['id'] ??
+        '-';
+
+    final amount = payment['amount'] ??
+        payment['total_amount'] ??
+        order['total_price'] ??
+        0;
+
+    final status = _paymentStatus(payment);
+
+    final createdAt = payment['created_at'] ??
+        payment['paid_at'] ??
+        payment['payment_date'];
+
+    final method = _paymentMethod(payment);
     final color = _statusColor(status);
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 5,
-      ),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(17),
         border: Border.all(
-          color: color.withValues(alpha: 0.5),
+          color: Colors.white.withValues(alpha: 0.08),
         ),
       ),
-      child: Text(
-        _statusLabel(status),
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Pembayaran #$paymentId',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _statusLabel(status),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 15),
+
+          _buildInfoRow(
+            Icons.receipt_long_outlined,
+            'ID Pesanan',
+            '#$orderId',
+          ),
+
+          _buildInfoRow(
+            Icons.payments_outlined,
+            'Jumlah Pembayaran',
+            _formatCurrency(amount),
+          ),
+
+          _buildInfoRow(
+            Icons.account_balance_wallet_outlined,
+            'Metode Pembayaran',
+            method,
+          ),
+
+          _buildInfoRow(
+            Icons.calendar_today_outlined,
+            'Tanggal Pembayaran',
+            _formatDate(createdAt),
+          ),
+
+          if (payment['transaction_id'] != null)
+            _buildInfoRow(
+              Icons.tag,
+              'ID Transaksi',
+              payment['transaction_id'].toString(),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _detailRow(String label, String value) {
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.only(bottom: 11),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 125,
+          Icon(
+            icon,
+            size: 17,
+            color: Colors.white54,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
             child: Text(
               label,
               style: const TextStyle(
-                color: Colors.white54,
+                color: Colors.white60,
                 fontSize: 12,
               ),
             ),
           ),
-          const Text(
-            ': ',
-            style: TextStyle(color: Colors.white54),
-          ),
-          Expanded(
+          const SizedBox(width: 10),
+          Flexible(
             child: Text(
               value,
+              textAlign: TextAlign.end,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -230,175 +330,23 @@ class _AdminEventPaymentsPageState
     );
   }
 
-  Widget _buildPaymentCard(Map<String, dynamic> payment) {
-    final paymentId = _readValue(
-      payment,
-      ['id', 'payment_id'],
-    );
-
-    final orderId = _readValue(
-      payment,
-      ['order_id'],
-    );
-
-    final amount = _readValue(
-      payment,
-      ['amount', 'total_amount', 'total'],
-    );
-
-    final status = _readValue(
-      payment,
-      ['status', 'payment_status'],
-      fallback: 'pending',
-    );
-
-    final method = _methodLabel(
-      _readValue(
-        payment,
-        ['method', 'payment_method', 'method_name'],
-        fallback: '-',
-      ),
-    );
-
-    final transactionId = _readValue(
-      payment,
-      ['transaction_id'],
-    );
-
-    final paidAt = _formatDate(
-      payment['paid_at'] ?? payment['created_at'],
-    );
-
-    final order = payment['order'];
-
-    String customerName = '-';
-    String eventName = '-';
-
-    if (order is Map) {
-      final user = order['user'];
-
-      if (user is Map) {
-        customerName = _readValue(
-          user.cast<String, dynamic>(),
-          ['name', 'username', 'full_name'],
-        );
-      }
-
-      final event = order['event'];
-
-      if (event is Map) {
-        eventName = _readValue(
-          event.cast<String, dynamic>(),
-          ['name', 'title'],
-        );
-      }
-
-      if (customerName == '-') {
-        customerName = _readValue(
-          order.cast<String, dynamic>(),
-          ['username', 'user_name', 'customer_name'],
-        );
-      }
-    }
-
-    if (eventName == '-') {
-      eventName = _readValue(
-        payment,
-        ['event_name', 'event_title'],
-      );
-    }
-
-    return Card(
-      color: AppTheme.surface,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.payments,
-                  color: Colors.white70,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Pembayaran #$paymentId',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-                _buildStatus(status),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _detailRow('ID Pesanan', orderId),
-            _detailRow('Nama Pembeli', customerName),
-            _detailRow('Nama Event', eventName),
-            _detailRow('Metode Pembayaran', method),
-            _detailRow('Nominal', 'Rp $amount'),
-            _detailRow('Tanggal', paidAt),
-            if (transactionId != '-')
-              _detailRow('ID Transaksi', transactionId),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmpty() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: const [
-        SizedBox(height: 150),
+        SizedBox(height: 130),
         Icon(
           Icons.payments_outlined,
           color: Colors.white38,
-          size: 55,
+          size: 65,
         ),
-        SizedBox(height: 14),
+        SizedBox(height: 16),
         Center(
           child: Text(
             'Belum ada pembayaran untuk event ini.',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildError(String error) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        const SizedBox(height: 120),
-        const Icon(
-          Icons.error_outline,
-          color: Colors.redAccent,
-          size: 45,
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: Text(
-            'Gagal memuat pembayaran:\n$error',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Center(
-          child: OutlinedButton.icon(
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Coba Lagi'),
+            style: TextStyle(
+              color: Colors.white70,
+            ),
           ),
         ),
       ],
@@ -409,55 +357,123 @@ class _AdminEventPaymentsPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+      drawer: const AdminEventDrawerPage(),
       appBar: AppBar(
-        title: const Text('Pembayaran Event'),
-        backgroundColor: AppTheme.surface,
-        foregroundColor: AppTheme.text,
-        actions: [
-          IconButton(
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Muat ulang',
+        backgroundColor: AppTheme.background,
+        title: const Text(
+          'Pembayaran Event',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 180),
-                  Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                ],
-              );
-            }
-
-            if (snapshot.hasError) {
-              return _buildError(snapshot.error.toString());
-            }
-
-            final payments = snapshot.data ?? [];
-
-            if (payments.isEmpty) {
-              return _buildEmpty();
-            }
-
-            return ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              itemCount: payments.length,
-              itemBuilder: (context, index) {
-                return _buildPaymentCard(payments[index]);
+        ),
+        leading: Builder(
+          builder: (context) {
+            return IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () {
+                Scaffold.of(context).openDrawer();
               },
             );
           },
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Kembali',
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              } else {
+                Navigator.pushReplacementNamed(
+                  context,
+                  '/admin-event',
+                );
+              }
+            },
+          ),
+          IconButton(
+            tooltip: 'Muat ulang',
+            icon: const Icon(Icons.refresh),
+            onPressed: _refresh,
+          ),
+        ],
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.redAccent,
+                      size: 45,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Gagal memuat data pembayaran.',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      snapshot.error.toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Coba Lagi'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final payments = snapshot.data ?? [];
+
+          if (payments.isEmpty) {
+            return _buildEmpty();
+          }
+
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(18),
+              children: [
+                Text(
+                  'Total ${payments.length} pembayaran',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                ...payments.map(_buildPaymentCard),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

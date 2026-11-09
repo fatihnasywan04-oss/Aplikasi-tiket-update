@@ -28,7 +28,7 @@ class _AdminEventEventsPageState
   // Mengambil semua event milik Admin Event,
   // termasuk pending, approved, dan rejected.
   Future<List<Map<String, dynamic>>> _loadEvents() async {
-    return await ApiService.getMyEvents();
+    return ApiService.getMyEvents();
   }
 
   Future<void> _refresh() async {
@@ -38,7 +38,219 @@ class _AdminEventEventsPageState
       _future = future;
     });
 
-    await future;
+    try {
+      await future;
+    } catch (_) {
+      // Error ditampilkan melalui FutureBuilder.
+    }
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  num? _toNum(dynamic value) {
+    if (value is num) return value;
+    return num.tryParse(value?.toString() ?? '');
+  }
+
+  String _eventName(Map<String, dynamic> event) {
+    return (event['title'] ??
+            event['name'] ??
+            'Tanpa nama')
+        .toString();
+  }
+
+  String _eventLocation(Map<String, dynamic> event) {
+    return (event['location'] ??
+            event['venue'] ??
+            'Lokasi belum ditentukan')
+        .toString();
+  }
+
+  // Mengubah tanggal menjadi WIB (UTC+7).
+  DateTime? _parseWibDate(dynamic value) {
+    if (value == null) return null;
+
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+
+    try {
+      final parsed = DateTime.parse(raw);
+
+      if (RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(raw)) {
+        final wib = parsed.toUtc().add(
+              const Duration(hours: 7),
+            );
+
+        return DateTime(
+          wib.year,
+          wib.month,
+          wib.day,
+          wib.hour,
+          wib.minute,
+          wib.second,
+        );
+      }
+
+      // Tanggal tanpa informasi timezone dianggap WIB.
+      return DateTime(
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatDate(dynamic value) {
+    final date = _parseWibDate(value);
+
+    if (date == null) {
+      return value?.toString() ?? 'Tanggal belum ditentukan';
+    }
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
+
+    return '${date.day.toString().padLeft(2, '0')} '
+        '${months[date.month - 1]} ${date.year}, '
+        '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _eventDate(Map<String, dynamic> event) {
+    final start = event['event_date'] ??
+        event['start_date'] ??
+        event['date'];
+
+    final end = event['end_date'];
+
+    if (start == null) {
+      return 'Tanggal belum ditentukan';
+    }
+
+    final startDate = _formatDate(start);
+
+    if (end == null || end.toString().trim().isEmpty) {
+      return startDate;
+    }
+
+    final parsedStart = _parseWibDate(start);
+    final parsedEnd = _parseWibDate(end);
+
+    if (parsedStart != null &&
+        parsedEnd != null &&
+        parsedStart.year == parsedEnd.year &&
+        parsedStart.month == parsedEnd.month &&
+        parsedStart.day == parsedEnd.day) {
+      return '${parsedStart.day.toString().padLeft(2, '0')}/'
+          '${parsedStart.month.toString().padLeft(2, '0')}/'
+          '${parsedStart.year} '
+          '${parsedStart.hour.toString().padLeft(2, '0')}:'
+          '${parsedStart.minute.toString().padLeft(2, '0')} - '
+          '${parsedEnd.hour.toString().padLeft(2, '0')}:'
+          '${parsedEnd.minute.toString().padLeft(2, '0')} WIB';
+    }
+
+    return '$startDate - ${_formatDate(end)}';
+  }
+
+  String _formatRupiah(num amount) {
+    final digits = amount.round().toString();
+    final buffer = StringBuffer();
+
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        buffer.write('.');
+      }
+
+      buffer.write(digits[i]);
+    }
+
+    return 'Rp $buffer';
+  }
+
+  List<Map<String, dynamic>> _getTicketClasses(
+    Map<String, dynamic> event,
+  ) {
+    final raw = event['ticket_classes'] ??
+        event['ticketClasses'] ??
+        event['ticket_classes_list'] ??
+        event['ticket_types'] ??
+        event['ticketTypes'];
+
+    if (raw is! List) return [];
+
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => Map<String, dynamic>.from(item),
+        )
+        .toList();
+  }
+
+  String _ticketPriceRange(Map<String, dynamic> event) {
+    final ticketClasses = _getTicketClasses(event);
+    final prices = <num>[];
+
+    for (final ticket in ticketClasses) {
+      final price = _toNum(
+        ticket['price'] ??
+            ticket['ticket_price'] ??
+            ticket['harga'],
+      );
+
+      if (price != null && price >= 0) {
+        prices.add(price);
+      }
+    }
+
+    if (prices.isNotEmpty) {
+      prices.sort();
+
+      if (prices.first == prices.last) {
+        return _formatRupiah(prices.first);
+      }
+
+      return '${_formatRupiah(prices.first)} - '
+          '${_formatRupiah(prices.last)}';
+    }
+
+    final basePrice = _toNum(
+          event['price'] ??
+              event['ticket_price'] ??
+              event['harga'],
+        ) ??
+        0;
+
+    return _formatRupiah(basePrice);
+  }
+
+  String _eventStatus(Map<String, dynamic> event) {
+    return (event['approval_status'] ??
+            event['status'] ??
+            'pending')
+        .toString()
+        .toLowerCase();
   }
 
   Color _statusColor(String status) {
@@ -67,60 +279,6 @@ class _AdminEventEventsPageState
     }
   }
 
-  String _eventName(Map<String, dynamic> event) {
-    return (event['name'] ??
-            event['title'] ??
-            'Tanpa nama')
-        .toString();
-  }
-
-  String _eventLocation(Map<String, dynamic> event) {
-    return (event['location'] ??
-            event['venue'] ??
-            'Lokasi belum ditentukan')
-        .toString();
-  }
-
-  String _eventDate(Map<String, dynamic> event) {
-    final start = event['event_date'] ??
-        event['start_date'] ??
-        event['date'];
-
-    final end = event['end_date'];
-
-    if (start == null) {
-      return 'Tanggal belum ditentukan';
-    }
-
-    final startDate = _formatDate(start);
-
-    if (end == null || end.toString().isEmpty) {
-      return startDate;
-    }
-
-    return '$startDate - ${_formatDate(end)}';
-  }
-
-  String _formatDate(dynamic value) {
-    try {
-      final date = DateTime.parse(value.toString()).toLocal();
-
-      return '${date.day.toString().padLeft(2, '0')}/'
-          '${date.month.toString().padLeft(2, '0')}/'
-          '${date.year}';
-    } catch (_) {
-      return value.toString();
-    }
-  }
-
-  String _eventStatus(Map<String, dynamic> event) {
-    return (event['approval_status'] ??
-            event['status'] ??
-            'pending')
-        .toString()
-        .toLowerCase();
-  }
-
   Widget _buildStatus(String status) {
     final color = _statusColor(status);
 
@@ -147,14 +305,54 @@ class _AdminEventEventsPageState
     );
   }
 
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String text,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          color: Colors.white54,
+          size: 17,
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildEventCard(Map<String, dynamic> event) {
     final status = _eventStatus(event);
+    final ticketClasses = _getTicketClasses(event);
+
+    final isCancelled = event['is_cancelled'] == true;
+    final isDeleted = event['is_deleted'] == true;
+
+    final ticketCount = ticketClasses.isNotEmpty
+        ? ticketClasses.length
+        : _toInt(event['ticket_class_count'] ??
+                event['ticket_classes_count']) ??
+            0;
 
     return Card(
       color: AppTheme.surface,
       margin: const EdgeInsets.only(bottom: 14),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: AppTheme.primary.withValues(alpha: 0.15),
+        ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -183,6 +381,8 @@ class _AdminEventEventsPageState
                   Expanded(
                     child: Text(
                       _eventName(event),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -195,49 +395,48 @@ class _AdminEventEventsPageState
                 ],
               ),
 
+              if (isCancelled || isDeleted) ...[
+                const SizedBox(height: 9),
+                Text(
+                  isDeleted
+                      ? 'EVENT DIHAPUS'
+                      : 'EVENT DIBATALKAN',
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 14),
 
-              Row(
-                children: [
-                  const Icon(
-                    Icons.location_on_outlined,
-                    color: Colors.white54,
-                    size: 17,
-                  ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      _eventLocation(event),
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
+              _buildInfoRow(
+                icon: Icons.location_on_outlined,
+                text: _eventLocation(event),
               ),
 
               const SizedBox(height: 9),
 
-              Row(
-                children: [
-                  const Icon(
-                    Icons.calendar_month_outlined,
-                    color: Colors.white54,
-                    size: 17,
-                  ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      _eventDate(event),
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
+              _buildInfoRow(
+                icon: Icons.calendar_month_outlined,
+                text: _eventDate(event),
               ),
+
+              const SizedBox(height: 9),
+
+              _buildInfoRow(
+                icon: Icons.confirmation_number_outlined,
+                text: 'Harga tiket: ${_ticketPriceRange(event)}',
+              ),
+
+              if (ticketCount > 0) ...[
+                const SizedBox(height: 9),
+                _buildInfoRow(
+                  icon: Icons.category_outlined,
+                  text: '$ticketCount kelas tiket',
+                ),
+              ],
 
               const SizedBox(height: 14),
 
@@ -258,7 +457,7 @@ class _AdminEventEventsPageState
                   const SizedBox(width: 7),
                   const Expanded(
                     child: Text(
-                      'Lihat detail event',
+                      'Lihat detail event dan kelas tiket',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 12,
@@ -303,8 +502,8 @@ class _AdminEventEventsPageState
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 35),
           child: Text(
-            'Buat event pertamamu dan tunggu persetujuan '
-            'dari Super Admin.',
+            'Buat event pertamamu beserta kelas tiketnya, '
+            'kemudian tunggu persetujuan dari Super Admin.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white60,
@@ -362,7 +561,6 @@ class _AdminEventEventsPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-
       drawer: const AdminEventDrawerPage(),
 
       appBar: AppBar(
@@ -424,7 +622,10 @@ class _AdminEventEventsPageState
               padding: const EdgeInsets.all(16),
               itemCount: events.length,
               itemBuilder: (context, index) {
-                return _buildEventCard(events[index]);
+                final event =
+                    Map<String, dynamic>.from(events[index]);
+
+                return _buildEventCard(event);
               },
             );
           },
