@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
+import 'admin_event_drawer_page.dart';
 
 class AdminEventReportsPage extends StatefulWidget {
   const AdminEventReportsPage({super.key});
@@ -31,6 +32,7 @@ class _AdminEventReportsPageState
   int? _toInt(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
+    if (value is num) return value.toInt();
     return int.tryParse(value.toString());
   }
 
@@ -74,6 +76,12 @@ class _AdminEventReportsPageState
       return _toInt(event['id'] ?? event['event_id']);
     }
 
+    final ticketClass = order['ticket_class'];
+
+    if (ticketClass is Map) {
+      return _toInt(ticketClass['event_id']);
+    }
+
     return null;
   }
 
@@ -99,41 +107,41 @@ class _AdminEventReportsPageState
     final payment = order['payment'] ?? order['latest_payment'];
 
     if (payment is Map) {
-      final status = _readValue(
-        payment.cast<String, dynamic>(),
-        ['status', 'payment_status'],
-        fallback: '',
-      ).toLowerCase();
+      final status = payment['status'] ??
+          payment['payment_status'] ??
+          '';
 
-      return status == 'success' || status == 'paid';
+      final normalizedStatus = status.toString().toLowerCase();
+
+      return normalizedStatus == 'success' ||
+          normalizedStatus == 'paid';
     }
 
     return false;
   }
 
   Future<void> _loadReports() async {
-    if (mounted) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
+    if (!mounted) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     try {
-      // Endpoint ini hanya mengambil event milik Admin Event
-      // yang sedang login.
+      // Mengambil event milik Admin Event yang sedang login.
       final myEvents = await ApiService.getMyEvents();
 
-      // Endpoint ini dibatasi backend berdasarkan kepemilikan event.
+      // Mengambil data pesanan dari API.
       final allOrders = await ApiService.getAdminOrders();
 
-      // Daftar ID event milik Admin Event yang sedang login.
+      // Mengumpulkan ID event milik admin yang sedang login.
       final myEventIds = myEvents
           .map((event) => _toInt(event['id'] ?? event['event_id']))
           .whereType<int>()
           .toSet();
 
-      // Hanya mengambil pesanan dari event milik akun ini.
+      // Memfilter pesanan berdasarkan kepemilikan event.
       final myOrders = allOrders.where((order) {
         final eventId = _getEventId(order);
 
@@ -154,6 +162,18 @@ class _AdminEventReportsPageState
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  void _goBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/admin-event',
+        (route) => false,
+      );
     }
   }
 
@@ -474,45 +494,37 @@ class _AdminEventReportsPageState
           ),
         ),
         const SizedBox(height: 12),
-
         _summaryCard(
           'Total Event Saya',
           '${_events.length}',
           Icons.event,
         ),
-
         _summaryCard(
           'Pesanan Lunas',
           '$totalPaidOrders',
           Icons.receipt_long,
         ),
-
         _summaryCard(
           'Tiket Terjual',
           '$totalTickets',
           Icons.confirmation_number,
         ),
-
         _summaryCard(
           'Total Omzet',
           _formatRupiah(totalRevenue),
           Icons.account_balance_wallet,
         ),
-
         _summaryCard(
           'Biaya Platform (5%)',
           _formatRupiah(totalFee),
           Icons.percent,
         ),
-
         _summaryCard(
           'Pendapatan Bersih',
           _formatRupiah(totalNet),
           Icons.payments,
         ),
-
         const SizedBox(height: 20),
-
         const Text(
           'Laporan Per Event Saya',
           style: TextStyle(
@@ -521,9 +533,7 @@ class _AdminEventReportsPageState
             fontWeight: FontWeight.bold,
           ),
         ),
-
         const SizedBox(height: 12),
-
         if (_events.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
@@ -536,9 +546,7 @@ class _AdminEventReportsPageState
           )
         else
           ..._events.map(_eventCard),
-
         const SizedBox(height: 20),
-
         const Text(
           '* Pendapatan dihitung dari pesanan berstatus lunas. '
           'Biaya platform 5% merupakan perhitungan laporan.',
@@ -555,11 +563,26 @@ class _AdminEventReportsPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+      drawer: const AdminEventDrawerPage(),
       appBar: AppBar(
         title: const Text('Laporan Event Saya'),
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.text,
+        leading: Builder(
+          builder: (context) => IconButton(
+            tooltip: 'Buka menu',
+            icon: const Icon(Icons.menu_rounded),
+            onPressed: () {
+              Scaffold.of(context).openDrawer();
+            },
+          ),
+        ),
         actions: [
+          IconButton(
+            tooltip: 'Kembali',
+            onPressed: _goBack,
+            icon: const Icon(Icons.arrow_back),
+          ),
           IconButton(
             onPressed: _loading ? null : _loadReports,
             icon: const Icon(Icons.refresh),

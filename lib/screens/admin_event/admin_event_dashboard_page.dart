@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -21,6 +22,10 @@ class _AdminEventDashboardPageState
     super.initState();
     _dashboardFuture = _loadDashboard();
   }
+
+  // ============================================================
+  // LOAD DASHBOARD
+  // ============================================================
 
   Future<Map<String, dynamic>> _loadDashboard() async {
     final results = await Future.wait([
@@ -112,8 +117,14 @@ class _AdminEventDashboardPageState
     };
   }
 
+  // ============================================================
+  // REFRESH
+  // ============================================================
+
   Future<void> _refresh() async {
     final future = _loadDashboard();
+
+    if (!mounted) return;
 
     setState(() {
       _dashboardFuture = future;
@@ -122,9 +133,15 @@ class _AdminEventDashboardPageState
     try {
       await future;
     } catch (error) {
-      debugPrint('[AdminEventDashboard] Refresh gagal: $error');
+      debugPrint(
+        '[AdminEventDashboard] Refresh gagal: $error',
+      );
     }
   }
+
+  // ============================================================
+  // READ NUMBER
+  // ============================================================
 
   int _readNumber(
     Map<String, dynamic> data,
@@ -140,6 +157,10 @@ class _AdminEventDashboardPageState
 
     return 0;
   }
+
+  // ============================================================
+  // METRIC CARD
+  // ============================================================
 
   Widget _buildMetric({
     required String title,
@@ -209,6 +230,10 @@ class _AdminEventDashboardPageState
     );
   }
 
+  // ============================================================
+  // STATUS ROW
+  // ============================================================
+
   Widget _buildStatusRow({
     required String title,
     required int value,
@@ -247,6 +272,10 @@ class _AdminEventDashboardPageState
       ),
     );
   }
+
+  // ============================================================
+  // DASHBOARD CONTENT
+  // ============================================================
 
   Widget _buildDashboard(Map<String, dynamic> data) {
     final totalEvents = _readNumber(data, 'total_events');
@@ -358,6 +387,7 @@ class _AdminEventDashboardPageState
 
           const SizedBox(height: 24),
 
+          // STATUS EVENT
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -397,6 +427,7 @@ class _AdminEventDashboardPageState
 
           const SizedBox(height: 16),
 
+          // STATUS PESANAN
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -436,6 +467,7 @@ class _AdminEventDashboardPageState
 
           const SizedBox(height: 16),
 
+          // STATUS PEMBAYARAN
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -520,20 +552,94 @@ class _AdminEventDashboardPageState
     );
   }
 
+  // ============================================================
+  // ERROR CONTENT
+  // ============================================================
+
+  Widget _buildError(Object error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_outlined,
+              color: Colors.white70,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Dashboard belum dapat dimuat.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error.toString(),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white60,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Coba lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+
+      // DRAWER ADMIN EVENT
       drawer: const AdminEventDrawerPage(),
+
       appBar: AppBar(
         backgroundColor: AppTheme.background,
+        foregroundColor: Colors.white,
+        elevation: 0,
+
+        // Tombol hamburger ditampilkan secara eksplisit.
+        automaticallyImplyLeading: false,
+        leading: Builder(
+          builder: (drawerContext) {
+            return IconButton(
+              tooltip: 'Buka menu',
+              icon: const Icon(
+                Icons.menu_rounded,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                Scaffold.of(drawerContext).openDrawer();
+              },
+            );
+          },
+        ),
+
         title: const Text(
           'Hikari Organizer',
           style: TextStyle(
+            color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
         ),
       ),
+
       body: FutureBuilder<Map<String, dynamic>>(
         future: _dashboardFuture,
         builder: (context, snapshot) {
@@ -545,47 +651,12 @@ class _AdminEventDashboardPageState
           }
 
           if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.cloud_off_outlined,
-                      color: Colors.white70,
-                      size: 48,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Dashboard belum dapat dimuat.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      snapshot.error.toString(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    FilledButton.icon(
-                      onPressed: _refresh,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Coba lagi'),
-                    ),
-                  ],
-                ),
-              ),
-            );
+            return _buildError(snapshot.error!);
           }
 
-          return _buildDashboard(snapshot.data ?? {});
+          return _buildDashboard(
+            snapshot.data ?? {},
+          );
         },
       ),
     );

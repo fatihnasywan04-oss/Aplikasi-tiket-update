@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
+import 'admin_event_drawer_page.dart';
 import 'admin_event_form_page.dart';
 import 'admin_event_orders_page.dart';
 import 'admin_event_payments_page.dart';
@@ -233,8 +234,18 @@ class AdminEventDetailPage extends StatelessWidget {
     if (eventId == null) {
       return Scaffold(
         backgroundColor: AppTheme.background,
+        drawer: const AdminEventDrawerPage(),
         appBar: AppBar(
           title: const Text('Detail Event'),
+          backgroundColor: AppTheme.surface,
+          foregroundColor: AppTheme.text,
+          leading: Builder(
+            builder: (context) => IconButton(
+              tooltip: 'Buka menu',
+              icon: const Icon(Icons.menu_rounded),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
         ),
         body: const Center(
           child: Text(
@@ -254,7 +265,10 @@ class AdminEventDetailPage extends StatelessWidget {
     final isDeleted = event['is_deleted'] == true;
     final isUnavailable = isCancelled || isDeleted;
 
-    final eventName = _readValue(['name', 'title'], fallback: 'Tanpa nama');
+    final eventName = _readValue(
+      ['name', 'title'],
+      fallback: 'Tanpa nama',
+    );
     final location = _readValue(['location', 'venue']);
     final startDate = _formatDate(
       _readValue(['event_date', 'start_date']),
@@ -271,10 +285,18 @@ class AdminEventDetailPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
+      drawer: const AdminEventDrawerPage(),
       appBar: AppBar(
         title: const Text('Detail Event'),
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.text,
+        leading: Builder(
+          builder: (context) => IconButton(
+            tooltip: 'Buka menu',
+            icon: const Icon(Icons.menu_rounded),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

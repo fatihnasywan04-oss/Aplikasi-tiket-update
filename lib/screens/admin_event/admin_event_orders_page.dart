@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -76,6 +77,8 @@ class _AdminEventOrdersPageState
   Future<void> _refresh() async {
     final future = _loadOrders();
 
+    if (!mounted) return;
+
     setState(() {
       _future = future;
     });
@@ -84,6 +87,18 @@ class _AdminEventOrdersPageState
       await future;
     } catch (e) {
       debugPrint('Refresh orders error: $e');
+    }
+  }
+
+  void _goBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/admin-event',
+        (route) => false,
+      );
     }
   }
 
@@ -108,6 +123,7 @@ class _AdminEventOrdersPageState
 
   String _formatCurrency(dynamic value) {
     final amount = _toInt(value);
+
     final formatted = amount.toString().replaceAllMapped(
       RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
       (match) => '${match[1]}.',
@@ -222,33 +238,27 @@ class _AdminEventOrdersPageState
               ),
             ],
           ),
-
           const SizedBox(height: 15),
-
           _buildInfoRow(
             Icons.person_outline,
             'Pelanggan',
             userName.toString(),
           ),
-
           _buildInfoRow(
             Icons.confirmation_number_outlined,
             'Kelas Tiket',
             ticketName.toString(),
           ),
-
           _buildInfoRow(
             Icons.shopping_bag_outlined,
             'Jumlah Tiket',
             quantity.toString(),
           ),
-
           _buildInfoRow(
             Icons.payments_outlined,
             'Total Pembayaran',
             _formatCurrency(totalPrice),
           ),
-
           _buildInfoRow(
             Icons.calendar_today_outlined,
             'Tanggal Pesanan',
@@ -337,29 +347,19 @@ class _AdminEventOrdersPageState
           ),
         ),
         leading: Builder(
-          builder: (context) {
-            return IconButton(
-              icon: const Icon(Icons.menu),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
-            );
-          },
+          builder: (context) => IconButton(
+            tooltip: 'Buka menu',
+            icon: const Icon(Icons.menu_rounded),
+            onPressed: () {
+              Scaffold.of(context).openDrawer();
+            },
+          ),
         ),
         actions: [
           IconButton(
             tooltip: 'Kembali',
             icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              if (Navigator.canPop(context)) {
-                Navigator.pop(context);
-              } else {
-                Navigator.pushReplacementNamed(
-                  context,
-                  '/admin-event',
-                );
-              }
-            },
+            onPressed: _goBack,
           ),
           IconButton(
             tooltip: 'Muat ulang',
@@ -422,7 +422,10 @@ class _AdminEventOrdersPageState
           final orders = snapshot.data ?? [];
 
           if (orders.isEmpty) {
-            return _buildEmpty();
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: _buildEmpty(),
+            );
           }
 
           return RefreshIndicator(

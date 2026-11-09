@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
@@ -7,23 +8,50 @@ import '../auth/login_page.dart';
 class AdminEventDrawerPage extends StatelessWidget {
   const AdminEventDrawerPage({super.key});
 
+  // ============================================================
+  // NAVIGASI
+  // ============================================================
+
   void _navigate(
     BuildContext context,
     String route,
   ) {
-    final navigator = Navigator.of(context);
+    // Pesanan dan pembayaran membutuhkan eventId.
+    // Jika dibuka dari drawer, arahkan ke daftar event dahulu.
+    // Pengguna dapat memilih event, kemudian membuka halaman
+    // pesanan atau pembayaran dari detail event.
+    String destination = route;
+
+    if (route == '/admin-event/orders' ||
+        route == '/admin-event/payments') {
+      destination = '/admin-event/events';
+    }
+
     final currentRoute = ModalRoute.of(context)?.settings.name;
 
-    // Tutup drawer terlebih dahulu.
-    navigator.pop();
-
-    // Jangan membuka ulang halaman yang sedang aktif.
-    if (currentRoute == route) {
+    // Jika halaman tujuan sedang aktif, cukup tutup drawer.
+    if (currentRoute == destination) {
+      Navigator.of(context).pop();
       return;
     }
 
-    navigator.pushReplacementNamed(route);
+    // Tutup drawer terlebih dahulu.
+    Navigator.of(context).pop();
+
+    // Jalankan navigasi setelah drawer ditutup.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        destination,
+        (route) => false,
+      );
+    });
   }
+
+  // ============================================================
+  // LOGOUT
+  // ============================================================
 
   Future<void> _logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -66,9 +94,7 @@ class AdminEventDrawerPage extends StatelessWidget {
     } catch (error) {
       debugPrint('[AdminEventDrawer] Logout gagal: $error');
 
-      if (!context.mounted) {
-        return;
-      }
+      if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -77,12 +103,11 @@ class AdminEventDrawerPage extends StatelessWidget {
           ),
         ),
       );
+
       return;
     }
 
-    if (!context.mounted) {
-      return;
-    }
+    if (!context.mounted) return;
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(
@@ -92,6 +117,10 @@ class AdminEventDrawerPage extends StatelessWidget {
     );
   }
 
+  // ============================================================
+  // MENU ITEM
+  // ============================================================
+
   Widget _buildMenuItem({
     required BuildContext context,
     required IconData icon,
@@ -99,7 +128,14 @@ class AdminEventDrawerPage extends StatelessWidget {
     required String route,
   }) {
     final currentRoute = ModalRoute.of(context)?.settings.name;
-    final isSelected = currentRoute == route;
+
+    // Pesanan dan Pembayaran merupakan halaman turunan event.
+    // Tandai menu tersebut aktif ketika pengguna berada di detail
+    // event atau halaman terkait.
+    final isSelected = currentRoute == route ||
+        ((route == '/admin-event/orders' ||
+                route == '/admin-event/payments') &&
+            (currentRoute == '/admin-event/events'));
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -138,6 +174,10 @@ class AdminEventDrawerPage extends StatelessWidget {
     );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -145,7 +185,7 @@ class AdminEventDrawerPage extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            // Header drawer.
+            // HEADER DRAWER
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(
@@ -206,7 +246,7 @@ class AdminEventDrawerPage extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // Menu navigasi.
+            // MENU NAVIGASI
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
@@ -292,7 +332,7 @@ class AdminEventDrawerPage extends StatelessWidget {
               ),
             ),
 
-            // Tombol logout.
+            // LOGOUT
             Divider(
               color: Colors.white.withValues(
                 alpha: 0.08,

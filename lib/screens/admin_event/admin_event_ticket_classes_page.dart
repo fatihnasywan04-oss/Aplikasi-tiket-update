@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
+import 'admin_event_drawer_page.dart';
 
 class AdminEventTicketClassesPage extends StatefulWidget {
   final int eventId;
@@ -167,6 +168,8 @@ class _AdminEventTicketClassesPageState
       final name = nameController.text.trim();
       final price = num.parse(priceController.text.trim());
       final stock = int.parse(stockController.text.trim());
+
+      if (!mounted) return;
 
       setState(() {
         _processing = true;
@@ -340,7 +343,7 @@ class _AdminEventTicketClassesPageState
       ),
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
     setState(() {
       _processing = true;
@@ -521,10 +524,18 @@ class _AdminEventTicketClassesPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+      drawer: const AdminEventDrawerPage(),
       appBar: AppBar(
         title: const Text('Kelas Tiket'),
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.text,
+        leading: Builder(
+          builder: (context) => IconButton(
+            tooltip: 'Buka menu',
+            icon: const Icon(Icons.menu_rounded),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         actions: [
           IconButton(
             onPressed: _processing ? null : _refresh,

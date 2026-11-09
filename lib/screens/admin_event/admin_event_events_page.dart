@@ -25,8 +25,10 @@ class _AdminEventEventsPageState
     _future = _loadEvents();
   }
 
-  // Mengambil semua event milik Admin Event,
-  // termasuk pending, approved, dan rejected.
+  // ============================================================
+  // LOAD EVENTS
+  // ============================================================
+
   Future<List<Map<String, dynamic>>> _loadEvents() async {
     return ApiService.getMyEvents();
   }
@@ -34,16 +36,22 @@ class _AdminEventEventsPageState
   Future<void> _refresh() async {
     final future = _loadEvents();
 
+    if (!mounted) return;
+
     setState(() {
       _future = future;
     });
 
     try {
       await future;
-    } catch (_) {
-      // Error ditampilkan melalui FutureBuilder.
+    } catch (error) {
+      debugPrint('[AdminEventEvents] Refresh gagal: $error');
     }
   }
+
+  // ============================================================
+  // DATA HELPERS
+  // ============================================================
 
   int? _toInt(dynamic value) {
     if (value is int) return value;
@@ -70,7 +78,10 @@ class _AdminEventEventsPageState
         .toString();
   }
 
-  // Mengubah tanggal menjadi WIB (UTC+7).
+  // ============================================================
+  // DATE WIB
+  // ============================================================
+
   DateTime? _parseWibDate(dynamic value) {
     if (value == null) return null;
 
@@ -82,8 +93,8 @@ class _AdminEventEventsPageState
 
       if (RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(raw)) {
         final wib = parsed.toUtc().add(
-              const Duration(hours: 7),
-            );
+          const Duration(hours: 7),
+        );
 
         return DateTime(
           wib.year,
@@ -95,7 +106,6 @@ class _AdminEventEventsPageState
         );
       }
 
-      // Tanggal tanpa informasi timezone dianggap WIB.
       return DateTime(
         parsed.year,
         parsed.month,
@@ -174,6 +184,10 @@ class _AdminEventEventsPageState
     return '$startDate - ${_formatDate(end)}';
   }
 
+  // ============================================================
+  // CURRENCY
+  // ============================================================
+
   String _formatRupiah(num amount) {
     final digits = amount.round().toString();
     final buffer = StringBuffer();
@@ -189,6 +203,10 @@ class _AdminEventEventsPageState
     return 'Rp $buffer';
   }
 
+  // ============================================================
+  // TICKET CLASSES
+  // ============================================================
+
   List<Map<String, dynamic>> _getTicketClasses(
     Map<String, dynamic> event,
   ) {
@@ -202,9 +220,7 @@ class _AdminEventEventsPageState
 
     return raw
         .whereType<Map>()
-        .map(
-          (item) => Map<String, dynamic>.from(item),
-        )
+        .map((item) => Map<String, dynamic>.from(item))
         .toList();
   }
 
@@ -244,6 +260,10 @@ class _AdminEventEventsPageState
 
     return _formatRupiah(basePrice);
   }
+
+  // ============================================================
+  // EVENT STATUS
+  // ============================================================
 
   String _eventStatus(Map<String, dynamic> event) {
     return (event['approval_status'] ??
@@ -305,6 +325,10 @@ class _AdminEventEventsPageState
     );
   }
 
+  // ============================================================
+  // INFO ROW
+  // ============================================================
+
   Widget _buildInfoRow({
     required IconData icon,
     required String text,
@@ -332,6 +356,10 @@ class _AdminEventEventsPageState
     );
   }
 
+  // ============================================================
+  // EVENT CARD
+  // ============================================================
+
   Widget _buildEventCard(Map<String, dynamic> event) {
     final status = _eventStatus(event);
     final ticketClasses = _getTicketClasses(event);
@@ -341,8 +369,10 @@ class _AdminEventEventsPageState
 
     final ticketCount = ticketClasses.isNotEmpty
         ? ticketClasses.length
-        : _toInt(event['ticket_class_count'] ??
-                event['ticket_classes_count']) ??
+        : _toInt(
+              event['ticket_class_count'] ??
+                  event['ticket_classes_count'],
+            ) ??
             0;
 
     return Card(
@@ -477,6 +507,10 @@ class _AdminEventEventsPageState
     );
   }
 
+  // ============================================================
+  // EMPTY STATE
+  // ============================================================
+
   Widget _buildEmpty() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -514,6 +548,10 @@ class _AdminEventEventsPageState
       ],
     );
   }
+
+  // ============================================================
+  // ERROR STATE
+  // ============================================================
 
   Widget _buildError(String error) {
     return ListView(
@@ -557,6 +595,10 @@ class _AdminEventEventsPageState
     );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -564,14 +606,27 @@ class _AdminEventEventsPageState
       drawer: const AdminEventDrawerPage(),
 
       appBar: AppBar(
+        backgroundColor: AppTheme.surface,
+        foregroundColor: AppTheme.text,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        leading: Builder(
+          builder: (drawerContext) {
+            return IconButton(
+              tooltip: 'Buka menu',
+              icon: const Icon(Icons.menu_rounded),
+              onPressed: () {
+                Scaffold.of(drawerContext).openDrawer();
+              },
+            );
+          },
+        ),
         title: const Text(
           'Event Saya',
           style: TextStyle(
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: AppTheme.surface,
-        foregroundColor: AppTheme.text,
       ),
 
       floatingActionButton: FloatingActionButton.extended(

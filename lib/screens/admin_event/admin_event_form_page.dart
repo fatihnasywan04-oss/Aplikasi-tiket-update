@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
+import 'admin_event_drawer_page.dart';
 
 class AdminEventFormPage extends StatefulWidget {
   final Map<String, dynamic>? event;
@@ -171,7 +172,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
     }
 
     if (!_isEdit) {
-      // Kelas tiket awal yang otomatis tersedia saat membuat event.
       _ticketClasses.add(
         _TicketClassInput(
           name: 'Regular',
@@ -750,7 +750,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
       return;
     }
 
-    // Validasi kelas tiket hanya untuk pembuatan event baru.
     if (!_isEdit) {
       if (_ticketClasses.isEmpty) {
         _message('Tambahkan minimal satu kelas tiket.');
@@ -808,7 +807,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
     try {
       String? imageUrl = _existingImageUrl;
 
-      // Upload banner baru jika pengguna memilih gambar.
       if (_selectedImage != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -842,7 +840,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
       };
 
       if (_isEdit) {
-        // Edit metadata tetap melalui mekanisme pengajuan perubahan.
         final eventId = int.tryParse(
           _readEventValue(['id', 'event_id']),
         );
@@ -853,21 +850,16 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
 
         await ApiService.updateEvent(eventId, data);
       } else {
-        // Buat data kelas tiket dalam satu payload.
         final ticketClassPayload = _ticketClasses.map((ticket) {
           return <String, dynamic>{
             'name': ticket.nameController.text.trim(),
-
-            // String digunakan agar nilai desimal tidak kehilangan presisi.
             'price': ticket.priceController.text.trim(),
-
             'available_tickets': int.parse(
               ticket.stockController.text.trim(),
             ),
           };
         }).toList();
 
-        // Harga event = harga kelas tiket terendah.
         final prices = _ticketClasses.map(
           (ticket) => num.parse(
             ticket.priceController.text.trim(),
@@ -878,7 +870,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
           (a, b) => a < b ? a : b,
         );
 
-        // Stok event = total stok seluruh kelas tiket.
         final totalStock = _ticketClasses.fold<int>(
           0,
           (total, ticket) {
@@ -889,10 +880,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
 
         data['price'] = minimumPrice.toString();
         data['available_tickets'] = totalStock;
-
-        // PENTING:
-        // Event dan semua kelas tiket dikirim bersamaan.
-        // Backend harus menyimpannya dalam satu transaksi database.
         data['ticket_classes'] = ticketClassPayload;
 
         await ApiService.createEvent(data);
@@ -940,12 +927,20 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+      drawer: const AdminEventDrawerPage(),
       appBar: AppBar(
         title: Text(
           _isEdit ? 'Ajukan Perubahan Event' : 'Buat Event',
         ),
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.text,
+        leading: Builder(
+          builder: (context) => IconButton(
+            tooltip: 'Buka menu',
+            icon: const Icon(Icons.menu_rounded),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
       ),
       body: Form(
         key: _formKey,
@@ -959,9 +954,7 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
                 color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: AppTheme.primary.withValues(
-                    alpha: 0.5,
-                  ),
+                  color: AppTheme.primary.withValues(alpha: 0.5),
                 ),
               ),
               child: Text(
@@ -981,10 +974,7 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
 
             _buildBannerPicker(),
 
-            _field(
-              'Nama Event',
-              _nameController,
-            ),
+            _field('Nama Event', _nameController),
 
             _field(
               'Deskripsi',
@@ -992,10 +982,7 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
               maxLines: 4,
             ),
 
-            _field(
-              'Lokasi',
-              _locationController,
-            ),
+            _field('Lokasi', _locationController),
 
             _field(
               'Username Instagram (opsional)',
@@ -1031,7 +1018,6 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
               ),
             ),
 
-            // Kelas tiket hanya dimasukkan saat membuat event baru.
             if (!_isEdit) _buildTicketClasses(),
 
             if (_isEdit)
