@@ -1,13 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import 'api_service.dart';
-import 'screens/auth/login_page.dart';
 import 'screens/admin/admin_dashboard_page.dart';
 import 'screens/admin_event/admin_event_dashboard_page.dart';
+import 'screens/auth/login_page.dart';
 import 'screens/user/user_shell.dart';
 import 'widgets/app_error_view.dart';
 
@@ -19,7 +20,7 @@ class VideoIntroPage extends StatefulWidget {
 }
 
 class _VideoIntroPageState extends State<VideoIntroPage> {
-  late final VideoPlayerController _controller;
+  VideoPlayerController? _controller;
 
   Timer? _initializationTimer;
 
@@ -31,6 +32,14 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
   @override
   void initState() {
     super.initState();
+
+    // Jika di Web, bypass video player dan langsung buka aplikasi
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openApp();
+      });
+      return;
+    }
 
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.immersiveSticky,
@@ -55,8 +64,11 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
   }
 
   Future<void> _initializeVideo() async {
+    final controller = _controller;
+    if (controller == null) return;
+
     try {
-      await _controller.initialize().timeout(
+      await controller.initialize().timeout(
         const Duration(seconds: 10),
       );
 
@@ -64,14 +76,14 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
 
       _initializationTimer?.cancel();
 
-      _controller.addListener(_checkVideoCompletion);
+      controller.addListener(_checkVideoCompletion);
 
       setState(() {
         _initialized = true;
         _initializationFailed = false;
       });
 
-      await _controller.play();
+      await controller.play();
     } catch (error, stackTrace) {
       debugPrint('[VideoIntro] Gagal memuat video: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -87,11 +99,12 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
   }
 
   void _checkVideoCompletion() {
-    if (_navigated || !_controller.value.isInitialized) {
+    final controller = _controller;
+    if (_navigated || controller == null || !controller.value.isInitialized) {
       return;
     }
 
-    final value = _controller.value;
+    final value = controller.value;
 
     if (value.hasError) {
       debugPrint(
@@ -125,10 +138,10 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
     _openingApp = true;
     _initializationTimer?.cancel();
 
-    _controller.removeListener(_checkVideoCompletion);
+    _controller?.removeListener(_checkVideoCompletion);
 
     try {
-      await _controller.pause();
+      await _controller?.pause();
     } catch (error) {
       debugPrint(
         '[VideoIntro] Gagal menghentikan video: $error',
@@ -196,8 +209,6 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
         '[VideoIntro] Gagal membuka aplikasi: $error',
       );
       debugPrintStack(stackTrace: stackTrace);
-
-      if (!mounted || _navigated) return;
 
       final message = error.toString().toLowerCase();
 
@@ -267,17 +278,21 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
   void dispose() {
     _initializationTimer?.cancel();
 
-    _controller.removeListener(_checkVideoCompletion);
-    _controller.dispose();
+    _controller?.removeListener(_checkVideoCompletion);
+    _controller?.dispose();
 
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final showVideo = _initialized &&
+    final controller = _controller;
+
+    final showVideo = !kIsWeb &&
+        _initialized &&
         !_initializationFailed &&
-        _controller.value.isInitialized;
+        controller != null &&
+        controller.value.isInitialized;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -285,14 +300,14 @@ class _VideoIntroPageState extends State<VideoIntroPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (showVideo)
+            if (showVideo && controller != null)
               SizedBox.expand(
                 child: FittedBox(
                   fit: BoxFit.cover,
                   child: SizedBox(
-                    width: _controller.value.size.width,
-                    height: _controller.value.size.height,
-                    child: VideoPlayer(_controller),
+                    width: controller.value.size.width,
+                    height: controller.value.size.height,
+                    child: VideoPlayer(controller),
                   ),
                 ),
               )
