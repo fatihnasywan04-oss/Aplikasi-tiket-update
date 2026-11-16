@@ -11,8 +11,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   ApiService._();
 
-  static const String baseUrl =
-      'https://backend-fastapi-1.fadehost.app';
+  static const String baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://backend-fastapi-1.fadehost.app',
+  );
 
   static const Duration _timeout = Duration(seconds: 20);
   static const Duration paymentExpiration = Duration(seconds: 60);
