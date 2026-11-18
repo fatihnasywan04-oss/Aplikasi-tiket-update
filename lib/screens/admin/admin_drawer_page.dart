@@ -22,61 +22,59 @@ class AdminDrawerPage extends StatelessWidget {
             _buildHeader(),
             const SizedBox(height: 16),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'MENU UTAMA',
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.8,
-                  ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 9),
+
+                    _item(
+                      context,
+                      icon: Icons.dashboard_outlined,
+                      title: 'Dashboard',
+                      route: '/admin',
+                    ),
+                    _item(
+                      context,
+                      icon: Icons.event_outlined,
+                      title: 'Kelola Event',
+                      route: '/admin/events',
+                    ),
+                    _item(
+                      context,
+                      icon: Icons.verified_user_outlined,
+                      title: 'Persetujuan Admin Event',
+                      route: '/admin/admin-event-applications',
+                    ),
+                    _item(
+                      context,
+                      icon: Icons.pending_actions_outlined,
+                      title: 'Review Event',
+                      route: '/admin/review-events',
+                    ),
+                    _item(
+                      context,
+                      icon: Icons.receipt_long_outlined,
+                      title: 'Pesanan',
+                      route: '/admin/orders',
+                    ),
+                    _item(
+                      context,
+                      icon: Icons.payments_outlined,
+                      title: 'Pembayaran',
+                      route: '/admin/payments',
+                    ),
+                    _item(
+                      context,
+                      icon: Icons.assessment_outlined,
+                      title: 'Laporan',
+                      route: '/admin/reports',
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 9),
-
-            _item(
-              context,
-              icon: Icons.dashboard_outlined,
-              title: 'Dashboard',
-              route: '/admin',
-            ),
-            _item(
-              context,
-              icon: Icons.event_outlined,
-              title: 'Kelola Event',
-              route: '/admin/events',
-            ),
-            _item(
-              context,
-              icon: Icons.verified_user_outlined,
-              title: 'Persetujuan Admin Event',
-              route: '/admin/admin-event-applications',
-            ),
-            _item(
-              context,
-              icon: Icons.receipt_long_outlined,
-              title: 'Pesanan',
-              route: '/admin/orders',
-            ),
-            _item(
-              context,
-              icon: Icons.payments_outlined,
-              title: 'Pembayaran',
-              route: '/admin/payments',
-            ),
-            _item(
-              context,
-              icon: Icons.assessment_outlined,
-              title: 'Laporan',
-              route: '/admin/reports',
-            ),
-
-            const Spacer(),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -182,12 +180,12 @@ class AdminDrawerPage extends StatelessWidget {
           ),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 58,
-            height: 58,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
               color: AppColors.gold.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(17),
@@ -195,63 +193,21 @@ class AdminDrawerPage extends StatelessWidget {
                 color: AppColors.gold.withValues(alpha: 0.45),
               ),
             ),
-            child: const Icon(
-              Icons.admin_panel_settings_rounded,
-              size: 34,
-              color: AppColors.gold,
+            padding: const EdgeInsets.all(8),
+            child: Image.asset(
+              'assets/images/app_logo.png',
+              fit: BoxFit.contain,
             ),
           ),
-          const SizedBox(height: 17),
-          const Text(
-            'HIKARI',
-            style: TextStyle(
-              color: AppColors.text,
-              fontSize: 23,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2.5,
-            ),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'ADMIN MANAGEMENT',
-            style: TextStyle(
-              color: AppColors.gold,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.7,
-            ),
-          ),
-          const SizedBox(height: 13),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 11,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: AppColors.success.withValues(alpha: 0.25),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Text(
+              'Panel Admin',
+              style: TextStyle(
+                color: AppColors.text,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
               ),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.circle,
-                  size: 7,
-                  color: AppColors.success,
-                ),
-                SizedBox(width: 7),
-                Text(
-                  'Panel Administrator',
-                  style: TextStyle(
-                    color: AppColors.success,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
             ),
           ),
         ],
