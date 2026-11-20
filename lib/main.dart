@@ -16,6 +16,7 @@ import 'screens/admin/admin_payments_page.dart';
 import 'screens/admin/admin_reports_page.dart';
 import 'screens/admin/admin_orders_page.dart';
 import 'screens/admin/admin_events_page.dart';
+import 'screens/admin/admin_event_approval_page.dart';
 
 // Admin Event
 import 'screens/admin_event/admin_event_dashboard_page.dart';
@@ -133,6 +134,9 @@ class EventTicketersApp extends StatelessWidget {
 
         '/admin/events': (_) =>
             const AdminEventsPage(),
+
+        '/admin/review-events': (_) =>
+            const AdminEventApprovalPage(),
 
         // Admin Event
         '/admin-event': (_) =>
