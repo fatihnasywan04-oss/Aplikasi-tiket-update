@@ -22,3 +22,5 @@ ios/Flutter/Generated.xcconfig
 
 
 .dart_tool/
+# Widget Preview related
+.widget_preview/
