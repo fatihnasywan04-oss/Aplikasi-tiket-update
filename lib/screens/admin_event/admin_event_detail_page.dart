@@ -5,7 +5,7 @@ import '../../api_service.dart';
 import '../../core/app_theme.dart';
 import 'admin_event_drawer_page.dart';
 import 'admin_event_form_page.dart';
-import 'admin_event_orders_page.dart';
+import 'admin_event_orders_page.dart'; 
 import 'admin_event_payments_page.dart';
 import 'admin_event_ticket_classes_page.dart';
 
@@ -43,6 +43,23 @@ class AdminEventDetailPage extends StatelessWidget {
     return '${date.day.toString().padLeft(2, '0')}/'
         '${date.month.toString().padLeft(2, '0')}/'
         '${date.year}';
+  }
+
+  String _formatRupiah(num? amount) {
+    if (amount == null) return '-';
+
+    final digits = amount.round().toString();
+    final buffer = StringBuffer();
+
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        buffer.write('.');
+      }
+
+      buffer.write(digits[i]);
+    }
+
+    return 'Rp $buffer';
   }
 
   String _statusLabel(String status) {
@@ -234,17 +251,15 @@ class AdminEventDetailPage extends StatelessWidget {
     if (eventId == null) {
       return Scaffold(
         backgroundColor: AppTheme.background,
-        drawer: const AdminEventDrawerPage(),
+        // drawer: const AdminEventDrawerPage(),
         appBar: AppBar(
           title: const Text('Detail Event'),
           backgroundColor: AppTheme.surface,
           foregroundColor: AppTheme.text,
-          leading: Builder(
-            builder: (context) => IconButton(
-              tooltip: 'Buka menu',
-              icon: const Icon(Icons.menu_rounded),
-              onPressed: () => Scaffold.of(context).openDrawer(),
-            ),
+          leading: IconButton(
+            tooltip: 'Kembali',
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.of(context).pop(),
           ),
         ),
         body: const Center(
@@ -277,7 +292,11 @@ class AdminEventDetailPage extends StatelessWidget {
       _readValue(['end_date']),
     );
     final description = _readValue(['description']);
-    final price = _readValue(['price', 'ticket_price']);
+    final price = _formatRupiah(
+      num.tryParse(
+        _readValue(['price', 'ticket_price'], fallback: '').trim(),
+      ),
+    );
     final availableTickets = _readValue([
       'available_tickets',
       'stock',
@@ -285,17 +304,15 @@ class AdminEventDetailPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      drawer: const AdminEventDrawerPage(),
+      // drawer: const AdminEventDrawerPage(),
       appBar: AppBar(
         title: const Text('Detail Event'),
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.text,
-        leading: Builder(
-          builder: (context) => IconButton(
-            tooltip: 'Buka menu',
-            icon: const Icon(Icons.menu_rounded),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
+        leading: IconButton(
+          tooltip: 'Kembali',
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: ListView(

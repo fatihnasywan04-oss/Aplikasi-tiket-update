@@ -60,14 +60,21 @@ class _AdminEventTicketClassesPageState
     return fallback;
   }
 
-  String _formatPrice(dynamic value) {
-    final price = num.tryParse(value?.toString() ?? '');
+  String _formatRupiah(num? amount) {
+    if (amount == null) return 'Rp 0';
 
-    if (price == null) return '0';
+    final digits = amount.round().toString();
+    final buffer = StringBuffer();
 
-    return price.toStringAsFixed(
-      price % 1 == 0 ? 0 : 2,
-    );
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        buffer.write('.');
+      }
+
+      buffer.write(digits[i]);
+    }
+
+    return 'Rp $buffer';
   }
 
   Future<void> _showClassForm({
@@ -390,7 +397,9 @@ class _AdminEventTicketClassesPageState
       fallback: 'Tanpa nama',
     );
 
-    final price = _formatPrice(ticketClass['price']);
+    final price = _formatRupiah(
+      num.tryParse(ticketClass['price']?.toString() ?? ''),
+    );
 
     final stock = _readValue(
       ticketClass,
@@ -415,7 +424,7 @@ class _AdminEventTicketClassesPageState
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
-            'Harga: Rp $price\n'
+            'Harga: $price\n'
             'Tiket tersedia: $stock',
             style: const TextStyle(
               color: Colors.white70,
@@ -529,12 +538,17 @@ class _AdminEventTicketClassesPageState
         title: const Text('Kelas Tiket'),
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.text,
-        leading: Builder(
-          builder: (context) => IconButton(
-            tooltip: 'Buka menu',
-            icon: const Icon(Icons.menu_rounded),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
+        // leading: Builder(
+        //   builder: (context) => IconButton(
+        //     tooltip: 'Buka menu',
+        //     icon: const Icon(Icons.menu_rounded),
+        //     onPressed: () => Scaffold.of(context).openDrawer(),
+        //   ),
+        // ),
+          leading: IconButton(
+          tooltip: 'Kembali',
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
         actions: [
           IconButton(
