@@ -204,40 +204,34 @@ class AdminEventDrawerPage extends StatelessWidget {
                   ),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    width: 54,
-                    height: 54,
+                    width: 64,
+                    height: 64,
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(
-                        alpha: 0.15,
+                      color: AppTheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(17),
+                      border: Border.all(
+                        color: AppTheme.primary.withValues(alpha: 0.45),
                       ),
-                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(
-                      Icons.event_available,
-                      color: AppTheme.primary,
-                      size: 30,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'HIKARI ORGANIZER',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
+                    padding: const EdgeInsets.all(8),
+                    child: Image.asset(
+                      'assets/images/app_logo.png',
+                      fit: BoxFit.contain,
                     ),
                   ),
-                  const SizedBox(height: 5),
-                  const Text(
-                    'Panel Admin Event',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 13,
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Text(
+                      'Panel Admin Event',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -251,24 +245,6 @@ class AdminEventDrawerPage extends StatelessWidget {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      20,
-                      10,
-                      20,
-                      8,
-                    ),
-                    child: Text(
-                      'MENU UTAMA',
-                      style: TextStyle(
-                        color: Colors.white38,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.3,
-                      ),
-                    ),
-                  ),
-
                   _buildMenuItem(
                     context: context,
                     icon: Icons.dashboard_outlined,
