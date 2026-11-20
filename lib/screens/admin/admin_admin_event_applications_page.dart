@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../api_service.dart';
+import '../../core/app_colors.dart';
+import 'admin_drawer_page.dart';
 
 class AdminAdminEventApplicationsPage extends StatefulWidget {
   const AdminAdminEventApplicationsPage({super.key});
@@ -10,18 +13,26 @@ class AdminAdminEventApplicationsPage extends StatefulWidget {
 }
 
 class _AdminAdminEventApplicationsPageState
-    extends State<AdminAdminEventApplicationsPage> {
+    extends State<AdminAdminEventApplicationsPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
   bool _isLoading = true;
   bool _isSubmitting = false;
-
-  String _selectedStatus = 'pending';
 
   List<Map<String, dynamic>> _applications = [];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _loadApplications();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   // ============================================================
@@ -342,9 +353,7 @@ class _AdminAdminEventApplicationsPageState
         Navigator.pop(dialogContext);
       }
 
-      setState(() {
-        _selectedStatus = 'approved';
-      });
+      _tabController.animateTo(1);
 
       _showMessage(
         'Akun Admin Event berhasil dibuat dan langsung aktif.',
@@ -572,12 +581,14 @@ class _AdminAdminEventApplicationsPageState
   // FILTER
   // ============================================================
 
-  List<Map<String, dynamic>> get _filteredApplications {
+  List<Map<String, dynamic>> _applicationsByStatus(String status) {
     return _applications.where((application) {
-      return _getApplicationStatus(application) ==
-          _selectedStatus;
+      return _getApplicationStatus(application) == status;
     }).toList();
   }
+
+  int _countByStatus(String status) =>
+      _applicationsByStatus(status).length;
 
   String _statusLabel(String? status) {
     switch (status) {
@@ -604,39 +615,53 @@ class _AdminAdminEventApplicationsPageState
         return Colors.grey;
     }
   }
-    // ============================================================
-  // STATUS FILTER WIDGET
+  // ============================================================
+  // APPLICATION TAB
   // ============================================================
 
-  Widget _buildStatusFilter() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
+  Widget _buildApplicationsTab(String status) {
+    final applications = _applicationsByStatus(status);
+
+    if (applications.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _filterButton('pending', 'Menunggu'),
-            const SizedBox(width: 8),
-            _filterButton('approved', 'Disetujui'),
-            const SizedBox(width: 8),
-            _filterButton('rejected', 'Ditolak'),
+            Icon(
+              Icons.inbox_outlined,
+              size: 56,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Tidak ada pengajuan '
+              '${_statusLabel(status).toLowerCase()}.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+              ),
+            ),
           ],
         ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadApplications,
+      child: ListView.builder(
+        physics:
+            const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(
+          top: 8,
+          bottom: 90,
+        ),
+        itemCount: applications.length,
+        itemBuilder: (context, index) {
+          return _buildApplicationCard(
+            applications[index],
+          );
+        },
       ),
-    );
-  }
-
-  Widget _filterButton(String value, String label) {
-    final selected = _selectedStatus == value;
-
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) {
-        setState(() {
-          _selectedStatus = value;
-        });
-      },
     );
   }
 
@@ -810,37 +835,23 @@ class _AdminAdminEventApplicationsPageState
   }
 
   // ============================================================
-  // BACK NAVIGATION
-  // ============================================================
-
-  void _goBack() {
-    if (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    } else {
-      Navigator.pushReplacementNamed(
-        context,
-        '/admin',
-      );
-    }
-  }
-
-  // ============================================================
   // BUILD
   // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    final applications = _filteredApplications;
-
     return Scaffold(
+      drawer: const AdminDrawerPage(
+        currentRoute: '/admin/admin-event-applications',
+      ),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        automaticallyImplyLeading: false,
-        leading: IconButton(
-          tooltip: 'Kembali',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: _goBack,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.text,
+        title: const Text(
+          'Persetujuan Admin Event',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        title: const Text('Persetujuan Admin Event'),
         actions: [
           IconButton(
             tooltip: 'Muat ulang',
@@ -850,98 +861,52 @@ class _AdminAdminEventApplicationsPageState
             icon: const Icon(Icons.refresh),
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.gold,
+          labelColor: AppColors.gold,
+          unselectedLabelColor: AppColors.textSecondary,
+          tabs: [
+            Tab(
+              text:
+                  'Menunggu (${_countByStatus('pending')})',
+            ),
+            Tab(
+              text:
+                  'Disetujui (${_countByStatus('approved')})',
+            ),
+            Tab(
+              text:
+                  'Ditolak (${_countByStatus('rejected')})',
+            ),
+          ],
+        ),
       ),
 
-      body: Column(
-        children: [
-          // ==================================================
-          // CREATE ADMIN EVENT BUTTON
-          // ==================================================
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              4,
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isSubmitting
-                    ? null
-                    : _showCreateAdminEventDialog,
-                icon: const Icon(
-                  Icons.person_add_alt_1,
-                ),
-                label: const Text(
-                  'Buat Akun Admin Event',
-                ),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 13,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // ==================================================
-          // STATUS FILTER
-          // ==================================================
-
-          _buildStatusFilter(),
-
-          // ==================================================
-          // APPLICATION LIST
-          // ==================================================
-
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(),
-                  )
-                : applications.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.inbox_outlined,
-                              size: 56,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Tidak ada pengajuan '
-                              '${_statusLabel(_selectedStatus).toLowerCase()}.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadApplications,
-                        child: ListView.builder(
-                          physics:
-                              const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(
-                            bottom: 20,
-                          ),
-                          itemCount: applications.length,
-                          itemBuilder: (context, index) {
-                            return _buildApplicationCard(
-                              applications[index],
-                            );
-                          },
-                        ),
-                      ),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isSubmitting
+            ? null
+            : _showCreateAdminEventDialog,
+        icon: const Icon(
+          Icons.person_add_alt_1,
+        ),
+        label: const Text(
+          'Buat Akun Admin Event',
+        ),
       ),
+
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildApplicationsTab('pending'),
+                _buildApplicationsTab('approved'),
+                _buildApplicationsTab('rejected'),
+              ],
+            ),
     );
   }
 }
