@@ -1,26 +1,39 @@
-
-# Flutter dan Dart.dart_tool/
+# Flutter dan Dart
+.dart_tool/
 .packages
 .pub/
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
+.widget_preview/
+coverage/
 
-# IDE
+# IDE & OS
 .idea/
 .vscode/
 *.iml
+.DS_Store
+Thumbs.db
 
-# Konfigurasi lokal
+# Konfigurasi lokal & Generated Files
 android/local.properties
+android/.gradle/
+**/android/**/GeneratedPluginRegistrant.java
+
 ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+**/macos/Flutter/ephemeral/
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+
+**/windows/flutter/generated_plugin_registrant.*
+**/windows/flutter/generated_plugins.cmake
+
+**/linux/flutter/generated_plugin_registrant.*
+**/linux/flutter/generated_plugins.cmake
 
 # File rahasia
 .env
 .env.*
 !.env.example
-
-
-.dart_tool/
-# Widget Preview related
-.widget_preview/
