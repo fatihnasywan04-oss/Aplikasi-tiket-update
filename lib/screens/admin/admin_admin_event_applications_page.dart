@@ -33,6 +33,27 @@ class _AdminAdminEventApplicationsPageState
     return (account['user_email'] ?? account['email'] ?? '-').toString();
   }
 
+  String? _getCreatedAt(Map<String, dynamic> account) {
+    final value = account['created_at'];
+    return value?.toString();
+  }
+
+  String _formatDate(String? rawDate) {
+    if (rawDate == null || rawDate.trim().isEmpty) return '-';
+
+    final parsed = DateTime.tryParse(rawDate.trim());
+    if (parsed == null) return rawDate;
+
+    final wib = parsed.toUtc().add(const Duration(hours: 7));
+    final day = wib.day.toString().padLeft(2, '0');
+    final month = wib.month.toString().padLeft(2, '0');
+    final year = wib.year.toString();
+    final hour = wib.hour.toString().padLeft(2, '0');
+    final minute = wib.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/$year $hour:$minute WIB';
+  }
+
   Future<void> _loadAccounts() async {
     if (!mounted) return;
 
@@ -262,60 +283,77 @@ class _AdminAdminEventApplicationsPageState
     );
   }
 
-  Widget _buildAccountCard(Map<String, dynamic> account) {
+Widget _buildAccountCard(Map<String, dynamic> account) {
     final name = _getAccountName(account);
     final email = _getAccountEmail(account);
+    final createdAt = _getCreatedAt(account);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: Colors.blue.shade50,
-              child: const Icon(Icons.person_outline, color: Colors.blue),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Colors.blue.shade50,
+                  child: const Icon(Icons.person_outline, color: Colors.blue),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        email,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Aktif',
                     style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 13,
+                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Aktif',
+            if (createdAt != null && createdAt.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Divider(),
+              Text(
+                'Ditambahkan pada: ${_formatDate(createdAt)}',
                 style: TextStyle(
-                  color: Colors.green,
-                  fontWeight: FontWeight.w600,
                   fontSize: 12,
+                  color: Colors.grey.shade600,
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -347,7 +385,7 @@ class _AdminAdminEventApplicationsPageState
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isSubmitting ? null : _showCreateAdminEventDialog,
         icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('Buat Akun Admin Event'),
+        label: const Text('Buat Akun'),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
