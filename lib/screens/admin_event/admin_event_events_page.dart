@@ -627,6 +627,13 @@ class _AdminEventEventsPageState
             fontWeight: FontWeight.bold,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Muat ulang',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
       ),
 
       floatingActionButton: FloatingActionButton.extended(
