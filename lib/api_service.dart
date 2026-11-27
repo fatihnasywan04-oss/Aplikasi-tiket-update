@@ -266,14 +266,21 @@ class ApiService {
     );
   }
 
-  static Future<void> _delete(
+ static Future<void> _delete(
     String path, {
     required Map<String, String> headers,
+    Object? body,
   }) async {
+    final mergedHeaders = {
+      ...headers,
+      if (body != null) 'Content-Type': 'application/json',
+    };
+
     await _request<dynamic>(
       () => http.delete(
         Uri.parse('$baseUrl$path'),
-        headers: headers,
+        headers: mergedHeaders,
+        body: body != null ? jsonEncode(body) : null,
       ),
     );
   }
@@ -849,14 +856,22 @@ class ApiService {
     );
   }
 
-  static Future<void> deleteEvent(int eventId) async {
+static Future<void> deleteEvent(
+    int eventId, {
+    String? reason,
+  }) async {
     if (eventId <= 0) {
       throw Exception('ID event tidak valid.');
     }
 
+    final trimmedReason = reason?.trim();
+
     await _delete(
       '/events/$eventId',
       headers: await _eventManagementHeaders(),
+      body: (trimmedReason != null && trimmedReason.isNotEmpty)
+          ? {'reason': trimmedReason}
+          : null,
     );
   }
 
@@ -1510,6 +1525,14 @@ class ApiService {
         '/events/admin/deletion-requests/$requestId/review',
         headers: await _adminHeaders(),
         body: body,
+      ),
+    );
+  }
+  static Future<List<Map<String, dynamic>>> getMyRequests() async {
+    return _list(
+      await _get(
+        '/events/my-requests',
+        headers: await _eventManagementHeaders(),
       ),
     );
   }
