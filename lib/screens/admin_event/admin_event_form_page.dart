@@ -1,38 +1,20 @@
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../api_service.dart';
-import '../../core/app_theme.dart';
-import 'admin_event_drawer_page.dart';
-
-class AdminEventFormPage extends StatefulWidget {
-  final Map<String, dynamic>? event;
-
-  const AdminEventFormPage({
-    super.key,
-    this.event,
-  });
-
-  @override
-  State<AdminEventFormPage> createState() =>
-      _AdminEventFormPageState();
-}
+import '../../core/app_colors.dart';
 
 class _TicketClassInput {
   final TextEditingController nameController;
   final TextEditingController priceController;
   final TextEditingController stockController;
 
-  _TicketClassInput({
-    String name = '',
-    String price = '0',
-    String stock = '100',
-  })  : nameController = TextEditingController(text: name),
-        priceController = TextEditingController(text: price),
-        stockController = TextEditingController(text: stock);
+  _TicketClassInput({String name = '', String price = '0', String stock = '0'})
+    : nameController = TextEditingController(text: name),
+      priceController = TextEditingController(text: price),
+      stockController = TextEditingController(text: stock);
 
   void dispose() {
     nameController.dispose();
@@ -41,44 +23,60 @@ class _TicketClassInput {
   }
 }
 
+// ============================================================
+// FORM EVENT DAN KELAS TIKET
+// ============================================================
+
+class AdminEventFormPage extends StatefulWidget {
+  final Map<String, dynamic>? event;
+
+  const AdminEventFormPage({super.key, this.event});
+
+  @override
+  State<AdminEventFormPage> createState() => _AdminEventFormPageState();
+}
+
 class _AdminEventFormPageState extends State<AdminEventFormPage> {
+  static const List<String> _categories = [
+    'Jejepangan',
+    'Musik',
+    'Gaming',
+    'Anime & Cosplay',
+    'Budaya',
+    'Olahraga',
+    'Seminar',
+    'Teknologi',
+    'Pendidikan',
+    'Lainnya',
+  ];
+
+  String _selectedCategory = 'Lainnya';
+
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _imagePicker = ImagePicker();
 
-  late final TextEditingController _nameController;
+  late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
   late final TextEditingController _instagramController;
+  late final TextEditingController _imageController;
 
   final List<_TicketClassInput> _ticketClasses = [];
 
-  DateTime? _eventDate;
-  bool _loading = false;
+  XFile? _selectedImage;
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+  DateTime? _selectedEndDate;
+  TimeOfDay? _selectedEndTime;
 
-  File? _selectedImage;
-  String? _existingImageUrl;
+  bool _saving = false;
+  bool _loadingTickets = false;
   bool _removeExistingImage = false;
 
-  bool get _isEdit => widget.event != null;
-
-  String _readEventValue(List<String> keys) {
-    final event = widget.event ?? {};
-
-    for (final key in keys) {
-      final value = event[key];
-
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
-    }
-
-    return '';
-  }
+  bool get _isEditing => widget.event != null;
 
   DateTime _nowWib() {
-    final now = DateTime.now().toUtc().add(
-          const Duration(hours: 7),
-        );
+    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
 
     return DateTime(
       now.year,
@@ -90,20 +88,17 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
     );
   }
 
-  DateTime? _parseWibDate(dynamic value) {
+  DateTime? _parseWibDateTime(dynamic value) {
     if (value == null) return null;
 
     final raw = value.toString().trim();
-
     if (raw.isEmpty) return null;
 
     try {
       final parsed = DateTime.parse(raw);
 
       if (RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(raw)) {
-        final wib = parsed.toUtc().add(
-              const Duration(hours: 7),
-            );
+        final wib = parsed.toUtc().add(const Duration(hours: 7));
 
         return DateTime(
           wib.year,
@@ -128,66 +123,395 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
     }
   }
 
-  String _formatWibDate(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
+  String _formatWibDateTime(DateTime dateTime) {
+    final year = dateTime.year.toString().padLeft(4, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final second = dateTime.second.toString().padLeft(2, '0');
 
-    return '$year-$month-${day}T00:00:00+07:00';
+    return '$year-$month-${day}T$hour:$minute:$second+07:00';
+  }
+
+  String _read(
+    Map<String, dynamic> data,
+    List<String> keys, {
+    String fallback = '',
+  }) {
+    for (final key in keys) {
+      final value = data[key];
+
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+
+    return fallback;
   }
 
   @override
   void initState() {
     super.initState();
 
-    _nameController = TextEditingController(
-      text: _readEventValue(['name', 'title']),
+    final event = widget.event ?? <String, dynamic>{};
+    final existingCategory = _read(event, ['category']);
+
+    _selectedCategory = _categories.contains(existingCategory)
+        ? existingCategory
+        : 'Lainnya';
+
+    _titleController = TextEditingController(
+      text: _read(event, ['title', 'name', 'nama_event']),
     );
 
     _descriptionController = TextEditingController(
-      text: _readEventValue(['description']),
+      text: _read(event, ['description', 'deskripsi']),
     );
 
     _locationController = TextEditingController(
-      text: _readEventValue(['location', 'venue']),
+      text: _read(event, ['location', 'venue', 'lokasi']),
     );
 
     _instagramController = TextEditingController(
-      text: _readEventValue(['instagram_username']),
+      text: _read(event, ['instagram_username']),
     );
 
-    _existingImageUrl = _readEventValue([
-      'image_url',
-      'poster_url',
-      'banner_url',
-    ]).trim();
+    _imageController = TextEditingController(
+      text: _read(event, ['image_url', 'poster_url', 'image', 'gambar']),
+    );
 
-    final dateValue = _readEventValue([
-      'event_date',
-      'start_date',
-    ]);
+    final parsedDate = _parseWibDateTime(
+      _read(event, ['event_date', 'date', 'tanggal']),
+    );
 
-    if (dateValue.isNotEmpty) {
-      _eventDate = _parseWibDate(dateValue);
+    if (parsedDate != null) {
+      _selectedDate = DateTime(
+        parsedDate.year,
+        parsedDate.month,
+        parsedDate.day,
+      );
+
+      _selectedTime = TimeOfDay.fromDateTime(parsedDate);
+    } else {
+      final now = _nowWib();
+
+      _selectedDate = DateTime(now.year, now.month, now.day + 1);
+      _selectedTime = const TimeOfDay(hour: 19, minute: 0);
     }
 
-    if (!_isEdit) {
+    final parsedEndDate = _parseWibDateTime(_read(event, ['end_date']));
+
+    if (parsedEndDate != null) {
+      _selectedEndDate = DateTime(
+        parsedEndDate.year,
+        parsedEndDate.month,
+        parsedEndDate.day,
+      );
+
+      _selectedEndTime = TimeOfDay.fromDateTime(parsedEndDate);
+    } else {
+      _selectedEndDate = _selectedDate;
+      _selectedEndTime = _selectedTime;
+    }
+
+    if (!_isEditing) {
       _ticketClasses.add(
-        _TicketClassInput(
-          name: 'Regular',
-          price: '100000',
-          stock: '100',
-        ),
+        _TicketClassInput(name: 'Standard', price: '0', stock: '100'),
+      );
+    } else {
+      _loadExistingTicketClasses(event);
+    }
+  }
+
+  void _populateTicketClasses(List<dynamic> classes) {
+    for (final ticket in _ticketClasses) {
+      ticket.dispose();
+    }
+    _ticketClasses.clear();
+
+    for (final cls in classes) {
+      if (cls is Map) {
+        _ticketClasses.add(
+          _TicketClassInput(
+            name: cls['name']?.toString() ?? '',
+            price: (cls['price'] ?? 0).toString(),
+            stock: (cls['available_tickets'] ?? cls['stock'] ?? 0).toString(),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadExistingTicketClasses(Map<String, dynamic> event) async {
+    final embedded = event['ticket_classes'];
+    if (embedded is List && embedded.isNotEmpty) {
+      _populateTicketClasses(embedded);
+      return;
+    }
+
+    final rawId = event['id'] ?? event['event_id'];
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+    if (id == null || id <= 0) return;
+
+    setState(() => _loadingTickets = true);
+    try {
+      final fetched = await ApiService.getTicketClasses(id);
+      if (!mounted) return;
+      setState(() {
+        _populateTicketClasses(fetched);
+      });
+    } catch (_) {
+      // Abaikan jika gagal memuat pratinjau kelas tiket
+    } finally {
+      if (mounted) {
+        setState(() => _loadingTickets = false);
+      }
+    }
+  }
+
+  num _toNumFallback(Map<String, dynamic>? event) {
+    if (event == null) return 0;
+
+    final value = event['price'] ?? event['ticket_price'] ?? event['harga'];
+
+    if (value is num) return value;
+
+    return num.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  String _formatRupiah(num amount) {
+    final digits = amount.round().toString();
+    final buffer = StringBuffer();
+
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        buffer.write('.');
+      }
+      buffer.write(digits[i]);
+    }
+
+    return 'Rp $buffer';
+  }
+
+  String _ticketPriceRange() {
+    final prices = <num>[];
+
+    for (final ticket in _ticketClasses) {
+      final price = num.tryParse(ticket.priceController.text.trim());
+
+      if (price != null && price >= 0) {
+        prices.add(price);
+      }
+    }
+
+    if (prices.isEmpty) {
+      if (_isEditing) {
+        final fallback = _toNumFallback(widget.event);
+        if (fallback > 0) {
+          return 'Mulai dari ${_formatRupiah(fallback)}';
+        }
+      }
+      return 'Masukkan harga kelas tiket';
+    }
+
+    prices.sort();
+
+    if (prices.first == prices.last) {
+      return 'Mulai dari ${_formatRupiah(prices.first)}';
+    }
+
+    return 'Mulai dari ${_formatRupiah(prices.first)} - '
+        '${_formatRupiah(prices.last)}';
+  }
+
+  DateTime _combineDateAndTime(DateTime date, TimeOfDay time) {
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  String _dateLabel(DateTime? date) {
+    if (date == null) return 'Pilih tanggal';
+
+    const months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  Future<void> _pickEventImage() async {
+    if (_saving) return;
+
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+
+      if (image == null || !mounted) return;
+
+      setState(() {
+        _selectedImage = image;
+        _removeExistingImage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      _message(
+        'Gagal memilih poster: '
+        '${e.toString().replaceFirst('Exception: ', '')}',
       );
     }
   }
 
+  Widget _posterPlaceholder() {
+    return const ColoredBox(
+      color: AppColors.surfaceDark,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.image_outlined, color: AppColors.gold, size: 42),
+            SizedBox(height: 8),
+            Text(
+              'Belum ada poster',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPosterPicker() {
+    final existingUrl = _removeExistingImage
+        ? ''
+        : _imageController.text.trim();
+
+    Widget preview;
+
+    if (_selectedImage != null) {
+      preview = Image.file(
+        File(_selectedImage!.path),
+        width: double.infinity,
+        height: 190,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _posterPlaceholder(),
+      );
+    } else if (existingUrl.isNotEmpty) {
+      preview = Image.network(
+        existingUrl,
+        width: double.infinity,
+        height: 190,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _posterPlaceholder(),
+      );
+    } else {
+      preview = _posterPlaceholder();
+    }
+
+    final hasPoster = _selectedImage != null || existingUrl.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Poster Event (opsional)',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: AppColors.text,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 190,
+              child: preview,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickEventImage,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: Text(hasPoster ? 'Ganti Poster' : 'Pilih dari Galeri'),
+                ),
+              ),
+              if (hasPoster) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Hapus poster',
+                  onPressed: _saving
+                      ? null
+                      : () {
+                          setState(() {
+                            _selectedImage = null;
+                            _removeExistingImage = true;
+                          });
+                        },
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: AppColors.error,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addTicketClass({
+    String name = '',
+    String price = '0',
+    String stock = '0',
+  }) {
+    setState(() {
+      _ticketClasses.add(
+        _TicketClassInput(name: name, price: price, stock: stock),
+      );
+    });
+  }
+
+  void _removeTicketClass(int index) {
+    if (_ticketClasses.length <= 1) {
+      _message('Minimal harus ada satu jenis tiket.');
+      return;
+    }
+
+    setState(() {
+      final ticket = _ticketClasses.removeAt(index);
+      ticket.dispose();
+    });
+  }
+
   @override
   void dispose() {
-    _nameController.dispose();
+    _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
     _instagramController.dispose();
+    _imageController.dispose();
 
     for (final ticket in _ticketClasses) {
       ticket.dispose();
@@ -196,158 +520,416 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
     super.dispose();
   }
 
-  String? _resolveImageUrl(String? value) {
+  Future<void> _pickStartDate() async {
+    final now = _nowWib();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final initial = _selectedDate ?? today.add(const Duration(days: 1));
+
+    final firstDate = _isEditing ? DateTime(2000, 1, 1) : today;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(firstDate) ? firstDate : initial,
+      firstDate: firstDate,
+      lastDate: DateTime(today.year + 10),
+      helpText: 'Pilih tanggal mulai event',
+      cancelText: 'Batal',
+      confirmText: 'Pilih',
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _selectedDate = picked;
+
+      if (_selectedEndDate == null || _selectedEndDate!.isBefore(picked)) {
+        _selectedEndDate = picked;
+      }
+    });
+  }
+
+  Future<void> _pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? const TimeOfDay(hour: 19, minute: 0),
+      helpText: 'Pilih waktu mulai event',
+      cancelText: 'Batal',
+      confirmText: 'Pilih',
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() => _selectedTime = picked);
+  }
+
+  Future<void> _pickEndDate() async {
+    final now = _nowWib();
+    final today = DateTime(now.year, now.month, now.day);
+    final startDate = _selectedDate ?? today;
+    final initial = _selectedEndDate ?? startDate;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(startDate) ? startDate : initial,
+      firstDate: startDate,
+      lastDate: DateTime(today.year + 10),
+      helpText: 'Pilih tanggal selesai event',
+      cancelText: 'Batal',
+      confirmText: 'Pilih',
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() => _selectedEndDate = picked);
+  }
+
+  Future<void> _pickEndTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedEndTime ?? const TimeOfDay(hour: 21, minute: 0),
+      helpText: 'Pilih waktu selesai event',
+      cancelText: 'Batal',
+      confirmText: 'Pilih',
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() => _selectedEndTime = picked);
+  }
+
+  String? _requiredValidator(String? value, String label) {
     if (value == null || value.trim().isEmpty) {
-      return null;
+      return '$label wajib diisi.';
     }
 
-    final uri = Uri.tryParse(value.trim());
+    return null;
+  }
 
-    if (uri == null) return null;
+  String? _instagramValidator(String? value) {
+    final username = (value ?? '').trim().replaceFirst(RegExp(r'^@'), '');
 
-    if (uri.hasScheme) {
-      if (uri.scheme != 'http' && uri.scheme != 'https') {
-        return null;
+    if (username.isEmpty) return null;
+
+    if (username.length > 30) {
+      return 'Username Instagram maksimal 30 karakter.';
+    }
+
+    if (!RegExp(r'^[a-zA-Z0-9._]+$').hasMatch(username)) {
+      return 'Username hanya boleh berisi huruf, angka, titik, dan underscore.';
+    }
+
+    return null;
+  }
+
+  String? _ticketNameValidator(String? value, int index) {
+    final name = (value ?? '').trim();
+
+    if (name.isEmpty) return 'Nama kelas tiket wajib diisi.';
+    if (name.length > 30) {
+      return 'Nama tiket maksimal 30 karakter.';
+    }
+
+    final normalized = name.toLowerCase();
+
+    final duplicates = _ticketClasses.where((ticket) {
+      return ticket.nameController.text.trim().toLowerCase() == normalized;
+    }).length;
+
+    if (duplicates > 1) {
+      return 'Nama kelas tiket tidak boleh duplikat.';
+    }
+
+    return null;
+  }
+
+  String? _ticketPriceValidator(String? value) {
+    final price = num.tryParse((value ?? '').trim());
+
+    if (price == null || !price.isFinite || price < 0) {
+      return 'Masukkan harga yang valid.';
+    }
+
+    return null;
+  }
+
+  String? _ticketStockValidator(String? value) {
+    final stock = int.tryParse((value ?? '').trim());
+
+    if (stock == null || stock < 0) {
+      return 'Stok harus bilangan bulat minimal 0.';
+    }
+
+    return null;
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+
+    FocusScope.of(context).unfocus();
+
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedDate == null ||
+        _selectedTime == null ||
+        _selectedEndDate == null ||
+        _selectedEndTime == null) {
+      _message('Pilih tanggal dan waktu mulai serta selesai event.');
+      return;
+    }
+
+    final chosenDateTime = _combineDateAndTime(_selectedDate!, _selectedTime!);
+
+    final chosenEndDateTime = _combineDateAndTime(
+      _selectedEndDate!,
+      _selectedEndTime!,
+    );
+
+    if (chosenEndDateTime.isBefore(chosenDateTime)) {
+      _message(
+        'Tanggal dan waktu selesai tidak boleh lebih awal '
+        'dari tanggal dan waktu mulai.',
+      );
+      return;
+    }
+
+    if (!_isEditing && !chosenDateTime.isAfter(_nowWib())) {
+      _message('Tanggal dan waktu mulai event harus di masa depan.');
+      return;
+    }
+
+    num price;
+    int totalStock = 0;
+
+    // Data kelas tiket hanya disertakan ketika membuat event baru.
+    if (_isEditing) {
+      price = _toNumFallback(widget.event);
+    } else {
+      if (_ticketClasses.isEmpty) {
+        _message('Tambahkan minimal satu jenis tiket.');
+        return;
       }
 
-      return uri.toString();
+      final ticketPrices = <num>[];
+      final names = <String>[];
+
+      for (final ticket in _ticketClasses) {
+        final ticketName = ticket.nameController.text.trim();
+
+        final ticketPrice = num.tryParse(ticket.priceController.text.trim());
+
+        final ticketStock = int.tryParse(ticket.stockController.text.trim());
+
+        if (ticketName.isEmpty ||
+            ticketName.length > 30 ||
+            ticketPrice == null ||
+            !ticketPrice.isFinite ||
+            ticketPrice < 0 ||
+            ticketStock == null ||
+            ticketStock < 0) {
+          _message('Periksa kembali data setiap kelas tiket.');
+          return;
+        }
+
+        ticketPrices.add(ticketPrice);
+        names.add(ticketName.toLowerCase());
+
+        totalStock += ticketStock;
+      }
+
+      if (names.toSet().length != names.length) {
+        _message('Nama kelas tiket tidak boleh duplikat.');
+        return;
+      }
+
+      ticketPrices.sort();
+      price = ticketPrices.first;
     }
 
-    return Uri.parse(ApiService.baseUrl).resolve(value).toString();
+    final rawId = widget.event?['id'] ?? widget.event?['event_id'];
+
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+
+    if (_isEditing && (id == null || id <= 0)) {
+      _message('ID event tidak valid untuk proses edit.');
+      return;
+    }
+
+    setState(() => _saving = true);
+
+    try {
+      String? imageUrl = _removeExistingImage
+          ? null
+          : (_imageController.text.trim().isEmpty
+                ? null
+                : _imageController.text.trim());
+
+      if (_selectedImage != null) {
+        imageUrl = await ApiService.uploadEventImage(
+          File(_selectedImage!.path),
+        );
+      }
+
+      final instagramUsername = _instagramController.text.trim().replaceFirst(
+        RegExp(r'^@'),
+        '',
+      );
+
+      final payload = <String, dynamic>{
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'location': _locationController.text.trim(),
+        'category': _selectedCategory,
+        'image_url': imageUrl,
+        'instagram_username': instagramUsername.isEmpty
+            ? null
+            : instagramUsername,
+        'event_date': _formatWibDateTime(chosenDateTime),
+        'end_date': _formatWibDateTime(chosenEndDateTime),
+      };
+
+      if (_isEditing) {
+        // Edit event tetap mengikuti mekanisme update yang sudah ada.
+        // Harga dan stok kelas tiket tidak diubah melalui form ini.
+        await ApiService.updateEvent(id!, payload);
+      } else {
+        // Harga event = harga kelas tiket termurah.
+        // Stok event = total stok seluruh kelas tiket.
+        payload['price'] = price;
+        payload['available_tickets'] = totalStock;
+
+        // Semua kelas tiket dikirim bersama event dalam satu request.
+        // Backend akan menyimpan event dan kelas tiket secara atomik.
+        payload['ticket_classes'] = _ticketClasses.map((ticket) {
+          return {
+            'name': ticket.nameController.text.trim(),
+            'price': num.parse(ticket.priceController.text.trim()),
+            'available_tickets': int.parse(ticket.stockController.text.trim()),
+          };
+        }).toList();
+
+        await ApiService.createEvent(payload);
+      }
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+
+      _message(
+        'Gagal ${_isEditing ? 'memperbarui event' : 'menyimpan event'}: '
+        '${e.toString().replaceFirst('Exception: ', '')}',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   void _message(String message) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 
-  Future<void> _pickImage() async {
-    if (_loading) return;
-
-    try {
-      final XFile? pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 90,
-        maxWidth: 2000,
-        maxHeight: 2000,
-      );
-
-      if (pickedFile == null || !mounted) return;
-
-      final imageFile = File(pickedFile.path);
-
-      if (!await imageFile.exists()) {
-        throw Exception('File gambar tidak ditemukan.');
-      }
-
-      final fileSize = await imageFile.length();
-
-      if (fileSize > 15 * 1024 * 1024) {
-        _message('Ukuran banner maksimal 15 MB.');
-        return;
-      }
-
-      setState(() {
-        _selectedImage = imageFile;
-        _removeExistingImage = false;
-      });
-    } catch (e) {
-      _message('Gagal memilih gambar: $e');
-    }
-  }
-
-  void _removeSelectedImage() {
-    if (_loading) return;
-
-    setState(() {
-      _selectedImage = null;
-      _removeExistingImage = true;
-    });
-  }
-
-  Future<void> _pickDate() async {
-    final now = _nowWib();
-    final today = DateTime(now.year, now.month, now.day);
-
-    final currentDate = _eventDate ?? today;
-
-    final firstDate = _isEdit
-        ? DateTime(2000, 1, 1)
-        : today;
-
-    final initialDate = currentDate.isBefore(firstDate)
-        ? firstDate
-        : currentDate;
-
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: DateTime(2100),
-    );
-
-    if (selected != null && mounted) {
-      setState(() {
-        _eventDate = selected;
-      });
-    }
-  }
-
-  Widget _field(
-    String label,
-    TextEditingController controller, {
+  Widget _field({
+    required String label,
+    required TextEditingController controller,
+    required String? Function(String?) validator,
     int maxLines = 1,
-    bool required = true,
+    TextInputType keyboardType = TextInputType.text,
     String? hint,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
         controller: controller,
+        enabled: !_saving,
+        validator: validator,
         maxLines: maxLines,
-        enabled: !_loading,
-        style: const TextStyle(color: Colors.white),
+        keyboardType: keyboardType,
+        style: const TextStyle(color: AppColors.text),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          labelStyle: const TextStyle(color: Colors.white70),
-          hintStyle: const TextStyle(color: Colors.white38),
+          labelStyle: const TextStyle(color: AppColors.textSecondary),
+          hintStyle: const TextStyle(color: AppColors.textMuted),
           filled: true,
-          fillColor: AppTheme.surface,
-          border: const OutlineInputBorder(),
+          fillColor: AppColors.surfaceDark,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.gold, width: 1.4),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
         ),
-        validator: (value) {
-          if (required &&
-              (value == null || value.trim().isEmpty)) {
-            return '$label wajib diisi';
-          }
-
-          return null;
-        },
       ),
     );
   }
 
-  Widget _buildBannerPicker() {
-    final existingUrl = _removeExistingImage
-        ? null
-        : _resolveImageUrl(_existingImageUrl);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      margin: const EdgeInsets.only(bottom: 18),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.10),
+  Widget _buildCategoryDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: DropdownButtonFormField<String>(
+        initialValue: _selectedCategory,
+        dropdownColor: AppColors.surface,
+        style: const TextStyle(color: AppColors.text),
+        decoration: InputDecoration(
+          labelText: 'Kategori Event *',
+          labelStyle: const TextStyle(color: AppColors.textSecondary),
+          filled: true,
+          fillColor: AppColors.surfaceDark,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.gold),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
         ),
+        items: _categories.map((category) {
+          return DropdownMenuItem<String>(
+            value: category,
+            child: Text(category),
+          );
+        }).toList(),
+        onChanged: _saving
+            ? null
+            : (value) {
+                if (value == null) return;
+
+                setState(() => _selectedCategory = value);
+              },
+      ),
+    );
+  }
+
+  Widget _buildPriceRangeCard() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primaryPale,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,728 +937,368 @@ class _AdminEventFormPageState extends State<AdminEventFormPage> {
           const Row(
             children: [
               Icon(
-                Icons.image_outlined,
-                color: Colors.white70,
+                Icons.confirmation_number_outlined,
+                color: AppColors.gold,
+                size: 20,
               ),
-              SizedBox(width: 10),
+              SizedBox(width: 8),
               Text(
-                'Banner Event',
+                'Jangkauan Harga',
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: _selectedImage != null
-                  ? Image.file(
-                      _selectedImage!,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    )
-                  : existingUrl != null
-                      ? Image.network(
-                          existingUrl,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (
-                            context,
-                            child,
-                            loadingProgress,
-                          ) {
-                            if (loadingProgress == null) {
-                              return child;
-                            }
-
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return _emptyBanner();
-                          },
-                        )
-                      : _emptyBanner(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _loading ? null : _pickImage,
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: Text(
-                    _selectedImage != null || existingUrl != null
-                        ? 'Ganti Banner'
-                        : 'Pilih Banner',
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 13,
-                    ),
-                  ),
-                ),
-              ),
-              if (_selectedImage != null || existingUrl != null) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: _loading ? null : _removeSelectedImage,
-                  tooltip: 'Hapus banner',
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.redAccent,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'Pilih gambar dari galeri. Disarankan menggunakan '
-            'gambar horizontal dengan rasio 16:9. '
-            'Maksimal ukuran file 15 MB.',
-            style: TextStyle(
-              color: Colors.white54,
-              fontSize: 11,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _emptyBanner() {
-    return Container(
-      width: double.infinity,
-      color: AppTheme.background,
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.image_not_supported_outlined,
-            color: Colors.white38,
-            size: 42,
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Belum ada banner event',
-            style: TextStyle(
-              color: Colors.white54,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================================
-  // PENGELOLAAN KELAS TIKET
-  // ==========================================================
-
-  void _addTicketClass() {
-    if (_loading) return;
-
-    setState(() {
-      _ticketClasses.add(
-        _TicketClassInput(
-          name: '',
-          price: '0',
-          stock: '100',
-        ),
-      );
-    });
-  }
-
-  void _removeTicketClass(int index) {
-    if (_loading) return;
-
-    if (_ticketClasses.length <= 1) {
-      _message('Minimal harus ada satu kelas tiket.');
-      return;
-    }
-
-    setState(() {
-      final removed = _ticketClasses.removeAt(index);
-      removed.dispose();
-    });
-  }
-
-  String? _validateTicketName(
-    String? value,
-    int currentIndex,
-  ) {
-    final name = value?.trim() ?? '';
-
-    if (name.isEmpty) {
-      return 'Nama kelas tiket wajib diisi.';
-    }
-
-    if (name.length > 30) {
-      return 'Nama kelas maksimal 30 karakter.';
-    }
-
-    final duplicate = _ticketClasses.asMap().entries.any((entry) {
-      if (entry.key == currentIndex) return false;
-
-      return entry.value.nameController.text
-              .trim()
-              .toLowerCase() ==
-          name.toLowerCase();
-    });
-
-    if (duplicate) {
-      return 'Nama kelas tiket tidak boleh sama.';
-    }
-
-    return null;
-  }
-
-  String? _validateTicketPrice(String? value) {
-    final raw = value?.trim() ?? '';
-
-    if (raw.isEmpty) {
-      return 'Harga tiket wajib diisi.';
-    }
-
-    final price = num.tryParse(raw);
-
-    if (price == null || !price.isFinite || price < 0) {
-      return 'Masukkan harga tiket yang valid.';
-    }
-
-    return null;
-  }
-
-  String? _validateTicketStock(String? value) {
-    final raw = value?.trim() ?? '';
-
-    if (raw.isEmpty) {
-      return 'Jumlah tiket wajib diisi.';
-    }
-
-    final stock = int.tryParse(raw);
-
-    if (stock == null || stock < 0) {
-      return 'Jumlah tiket harus berupa bilangan bulat >= 0.';
-    }
-
-    return null;
-  }
-
-  Widget _buildTicketClassCard(int index) {
-    final ticket = _ticketClasses[index];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppTheme.primary.withValues(alpha: 0.25),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Kelas Tiket ${index + 1}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-              if (_ticketClasses.length > 1)
-                IconButton(
-                  tooltip: 'Hapus kelas tiket',
-                  onPressed: _loading
-                      ? null
-                      : () => _removeTicketClass(index),
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.redAccent,
-                  ),
-                ),
             ],
           ),
           const SizedBox(height: 8),
-          TextFormField(
-            controller: ticket.nameController,
-            enabled: !_loading,
-            maxLength: 30,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              labelText: 'Nama Kelas Tiket',
-              hintText: 'Contoh: VIP, Regular, Early Bird',
-              labelStyle: TextStyle(color: Colors.white70),
-              hintStyle: TextStyle(color: Colors.white38),
-              counterStyle: TextStyle(color: Colors.white54),
-              border: OutlineInputBorder(),
+          Text(
+            _ticketPriceRange(),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.gold,
             ),
-            validator: (value) =>
-                _validateTicketName(value, index),
           ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: ticket.priceController,
-            enabled: !_loading,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              labelText: 'Harga Tiket',
-              hintText: 'Contoh: 150000',
-              prefixText: 'Rp ',
-              labelStyle: TextStyle(color: Colors.white70),
-              hintStyle: TextStyle(color: Colors.white38),
-              border: OutlineInputBorder(),
-            ),
-            validator: _validateTicketPrice,
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: ticket.stockController,
-            enabled: !_loading,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              labelText: 'Jumlah Stok Tiket',
-              hintText: 'Contoh: 100',
-              labelStyle: TextStyle(color: Colors.white70),
-              hintStyle: TextStyle(color: Colors.white38),
-              border: OutlineInputBorder(),
-            ),
-            validator: _validateTicketStock,
+          const SizedBox(height: 4),
+          const Text(
+            'Dihitung otomatis dari harga kelas tiket termurah '
+            'hingga termahal.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTicketClasses() {
-    return Container(
-      margin: const EdgeInsets.only(top: 18, bottom: 18),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppTheme.primary.withValues(alpha: 0.3),
-        ),
+  Widget _buildTicketClassFields(int index) {
+    final ticket = _ticketClasses[index];
+    final bool isEditing = _isEditing;
+
+    return Card(
+      key: ObjectKey(ticket),
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Kelas Tiket Event',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Kelas Tiket ${index + 1}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
                   ),
                 ),
-              ),
-              Text(
-                '${_ticketClasses.length} kelas',
-                style: const TextStyle(
-                  color: Colors.white60,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Tambahkan satu atau beberapa kelas tiket. '
-            'Setiap kelas memiliki harga dan stok masing-masing.',
-            style: TextStyle(
-              color: Colors.white60,
-              fontSize: 12,
-              height: 1.5,
+                if (!isEditing)
+                  IconButton(
+                    tooltip: 'Hapus kelas tiket',
+                    onPressed: _saving ? null : () => _removeTicketClass(index),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.error,
+                    ),
+                  ),
+              ],
             ),
-          ),
-          const SizedBox(height: 14),
-          ...List.generate(
-            _ticketClasses.length,
-            (index) => _buildTicketClassCard(index),
-          ),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _loading ? null : _addTicketClass,
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah Kelas Tiket'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 13),
+            if (isEditing) const SizedBox(height: 8),
+            TextFormField(
+              controller: ticket.nameController,
+              enabled: !_saving && !isEditing,
+              readOnly: isEditing,
+              textCapitalization: TextCapitalization.words,
+              maxLength: isEditing ? null : 30,
+              style: TextStyle(
+                color: isEditing ? AppColors.textSecondary : AppColors.text,
               ),
+              decoration: const InputDecoration(
+                labelText: 'Nama tiket *',
+                hintText: 'Standard, VIP, VVIP',
+                filled: true,
+                fillColor: AppColors.surfaceDark,
+                border: OutlineInputBorder(),
+              ),
+              validator: isEditing
+                  ? null
+                  : (value) => _ticketNameValidator(value, index),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: ticket.priceController,
+              enabled: !_saving && !isEditing,
+              readOnly: isEditing,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (_) => setState(() {}),
+              style: TextStyle(
+                color: isEditing ? AppColors.textSecondary : AppColors.text,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Harga tiket (Rp) *',
+                hintText: '100000',
+                filled: true,
+                fillColor: AppColors.surfaceDark,
+                border: OutlineInputBorder(),
+              ),
+              validator: isEditing ? null : _ticketPriceValidator,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: ticket.stockController,
+              enabled: !_saving && !isEditing,
+              readOnly: isEditing,
+              keyboardType: TextInputType.number,
+              style: TextStyle(
+                color: isEditing ? AppColors.textSecondary : AppColors.text,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Stok tiket *',
+                hintText: '100',
+                filled: true,
+                fillColor: AppColors.surfaceDark,
+                border: OutlineInputBorder(),
+              ),
+              validator: isEditing ? null : _ticketStockValidator,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ==========================================================
-  // PENYIMPANAN EVENT
-  // ==========================================================
-
-  Future<void> _save() async {
-    if (_loading) return;
-
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_eventDate == null) {
-      _message('Pilih tanggal event terlebih dahulu.');
-      return;
-    }
-
-    if (!_isEdit) {
-      if (_ticketClasses.isEmpty) {
-        _message('Tambahkan minimal satu kelas tiket.');
-        return;
-      }
-
-      for (var i = 0; i < _ticketClasses.length; i++) {
-        final ticket = _ticketClasses[i];
-
-        final name = ticket.nameController.text.trim();
-        final price = num.tryParse(
-          ticket.priceController.text.trim(),
-        );
-        final stock = int.tryParse(
-          ticket.stockController.text.trim(),
-        );
-
-        if (name.isEmpty || name.length > 30) {
-          _message('Periksa kembali nama kelas tiket.');
-          return;
-        }
-
-        if (price == null || !price.isFinite || price < 0) {
-          _message('Harga kelas tiket tidak valid.');
-          return;
-        }
-
-        if (stock == null || stock < 0) {
-          _message('Stok kelas tiket tidak valid.');
-          return;
-        }
-
-        final duplicate = _ticketClasses.asMap().entries.any(
-          (entry) {
-            if (entry.key == i) return false;
-
-            return entry.value.nameController.text
-                    .trim()
-                    .toLowerCase() ==
-                name.toLowerCase();
-          },
-        );
-
-        if (duplicate) {
-          _message('Nama kelas tiket tidak boleh sama.');
-          return;
-        }
-      }
-    }
-
-    setState(() {
-      _loading = true;
-    });
-
-    try {
-      String? imageUrl = _existingImageUrl;
-
-      if (_selectedImage != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Sedang mengunggah banner event...'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-
-        imageUrl = await ApiService.uploadEventImage(
-          _selectedImage!,
-        );
-      } else if (_removeExistingImage) {
-        imageUrl = null;
-      }
-
-      final eventDate = DateTime(
-        _eventDate!.year,
-        _eventDate!.month,
-        _eventDate!.day,
-      );
-
-      final data = <String, dynamic>{
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'location': _locationController.text.trim(),
-        'event_date': _formatWibDate(eventDate),
-        'instagram_username': _instagramController.text.trim(),
-        'image_url': imageUrl,
-      };
-
-      if (_isEdit) {
-        final eventId = int.tryParse(
-          _readEventValue(['id', 'event_id']),
-        );
-
-        if (eventId == null) {
-          throw Exception('ID event tidak valid.');
-        }
-
-        await ApiService.updateEvent(eventId, data);
-      } else {
-        final ticketClassPayload = _ticketClasses.map((ticket) {
-          return <String, dynamic>{
-            'name': ticket.nameController.text.trim(),
-            'price': ticket.priceController.text.trim(),
-            'available_tickets': int.parse(
-              ticket.stockController.text.trim(),
-            ),
-          };
-        }).toList();
-
-        final prices = _ticketClasses.map(
-          (ticket) => num.parse(
-            ticket.priceController.text.trim(),
-          ),
-        );
-
-        final minimumPrice = prices.reduce(
-          (a, b) => a < b ? a : b,
-        );
-
-        final totalStock = _ticketClasses.fold<int>(
-          0,
-          (total, ticket) {
-            return total +
-                int.parse(ticket.stockController.text.trim());
-          },
-        );
-
-        data['price'] = minimumPrice.toString();
-        data['available_tickets'] = totalStock;
-        data['ticket_classes'] = ticketClassPayload;
-
-        await ApiService.createEvent(data);
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _isEdit
-                ? 'Permintaan perubahan event berhasil dikirim.'
-                : 'Event dan ${_ticketClasses.length} kelas tiket '
-                    'berhasil dibuat. Menunggu persetujuan Super Admin.',
+  Widget _buildDateTimePicker({
+    required String title,
+    required String dateLabel,
+    required String timeLabel,
+    required VoidCallback onPickDate,
+    required VoidCallback onPickTime,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: AppColors.text,
           ),
         ),
-      );
-
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Gagal menyimpan event: '
-            '${e.toString().replaceFirst('Exception: ', '')}',
-          ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _saving ? null : onPickDate,
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(dateLabel),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _saving ? null : onPickTime,
+                icon: const Icon(Icons.access_time),
+                label: Text(timeLabel),
+              ),
+            ),
+          ],
         ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
-    }
+      ],
+    );
   }
-
-  // ==========================================================
-  // TAMPILAN FORM
-  // ==========================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      drawer: const AdminEventDrawerPage(),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(
-          _isEdit ? 'Ajukan Perubahan Event' : 'Buat Event',
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.text,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          tooltip: 'Kembali',
+          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
-        backgroundColor: AppTheme.surface,
-        foregroundColor: AppTheme.text,
-        leading: Builder(
-          builder: (context) => IconButton(
-            tooltip: 'Buka menu',
-            icon: const Icon(Icons.menu_rounded),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+        title: Text(
+          _isEditing ? 'Edit Event' : 'Tambah Event',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: AppColors.text,
           ),
         ),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              margin: const EdgeInsets.only(bottom: 18),
-              decoration: BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: AppTheme.primary.withValues(alpha: 0.5),
-                ),
-              ),
-              child: Text(
-                _isEdit
-                    ? 'Perubahan event akan dikirim kepada Super Admin '
-                        'dan baru diterapkan setelah disetujui.'
-                    : 'Lengkapi informasi event dan tambahkan kelas tiket. '
-                        'Event akan berstatus menunggu persetujuan Super Admin '
-                        'sebelum ditampilkan kepada pengguna.',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13,
-                  height: 1.5,
-                ),
-              ),
-            ),
-
-            _buildBannerPicker(),
-
-            _field('Nama Event', _nameController),
-
-            _field(
-              'Deskripsi',
-              _descriptionController,
-              maxLines: 4,
-            ),
-
-            _field('Lokasi', _locationController),
-
-            _field(
-              'Username Instagram (opsional)',
-              _instagramController,
-              required: false,
-            ),
-
-            const SizedBox(height: 4),
-
-            const Text(
-              'Tanggal Event',
-              style: TextStyle(
-                color: Colors.white70,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            OutlinedButton.icon(
-              onPressed: _loading ? null : _pickDate,
-              icon: const Icon(Icons.calendar_month),
-              label: Text(
-                _eventDate == null
-                    ? 'Pilih Tanggal Event'
-                    : '${_eventDate!.day.toString().padLeft(2, '0')}/'
-                        '${_eventDate!.month.toString().padLeft(2, '0')}/'
-                        '${_eventDate!.year}',
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.all(15),
-              ),
-            ),
-
-            if (!_isEdit) _buildTicketClasses(),
-
-            if (_isEdit)
-              Container(
-                padding: const EdgeInsets.all(14),
-                margin: const EdgeInsets.only(top: 18),
-                decoration: BoxDecoration(
-                  color: AppTheme.surface,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Column(
                   children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: Colors.white70,
+                    _field(
+                      label: 'Nama event *',
+                      controller: _titleController,
+                      validator: (value) =>
+                          _requiredValidator(value, 'Nama event'),
                     ),
-                    SizedBox(width: 10),
-                    Expanded(
+                    _buildCategoryDropdown(),
+                    _field(
+                      label: 'Deskripsi *',
+                      controller: _descriptionController,
+                      maxLines: 3,
+                      validator: (value) =>
+                          _requiredValidator(value, 'Deskripsi'),
+                    ),
+                    _field(
+                      label: 'Lokasi *',
+                      controller: _locationController,
+                      validator: (value) => _requiredValidator(value, 'Lokasi'),
+                    ),
+                    _field(
+                      label: 'Username Instagram (opsional)',
+                      controller: _instagramController,
+                      hint: '@username',
+                      validator: _instagramValidator,
+                    ),
+                    _buildPosterPicker(),
+
+                    _buildPriceRangeCard(),
+                    const SizedBox(height: 4),
+                    const Align(
+                      alignment: Alignment.centerLeft,
                       child: Text(
-                        'Perubahan kelas tiket dilakukan melalui menu '
-                        'Kelas Tiket. Pengajuan perubahan akan menunggu '
-                        'persetujuan Super Admin.',
+                        'Jenis Tiket',
                         style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          height: 1.5,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.text,
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _isEditing
+                            ? 'Ingin menambah atau mengubah kelas tiket? Gunakan tombol Kelola Kelas Tiket di halaman Detail Event.'
+                            : 'Catatan: Stok event dihitung dari total stok kelas tiket.',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_loadingTickets)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_ticketClasses.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Belum ada data kelas tiket terdaftar.',
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      ...List.generate(
+                        _ticketClasses.length,
+                        _buildTicketClassFields,
+                      ),
+                    if (!_isEditing)
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _saving ? null : () => _addTicketClass(),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Tambah Jenis Tiket'),
+                        ),
+                      ),
+
+                    const SizedBox(height: 18),
+                    _buildDateTimePicker(
+                      title: 'Tanggal dan waktu mulai event * (WIB)',
+                      dateLabel: _dateLabel(_selectedDate),
+                      timeLabel:
+                          _selectedTime?.format(context) ?? 'Pilih waktu',
+                      onPickDate: _pickStartDate,
+                      onPickTime: _pickStartTime,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDateTimePicker(
+                      title: 'Tanggal dan waktu selesai event * (WIB)',
+                      dateLabel: _dateLabel(_selectedEndDate),
+                      timeLabel:
+                          _selectedEndTime?.format(context) ?? 'Pilih waktu',
+                      onPickDate: _pickEndDate,
+                      onPickTime: _pickEndTime,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        OutlinedButton(
+                          onPressed: _saving
+                              ? null
+                              : () => Navigator.of(context).pop(false),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                          ),
+                          child: const Text('Batal'),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _saving ? null : _save,
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            icon: _saving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.save_outlined),
+                            label: Text(
+                              _saving ? 'Menyimpan...' : 'Simpan Event',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-
-            const SizedBox(height: 22),
-
-            ElevatedButton(
-              onPressed: _loading ? null : _save,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.all(15),
-              ),
-              child: _loading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : Text(
-                      _isEdit
-                          ? 'Kirim Permintaan Perubahan'
-                          : 'Buat Event dan Kelas Tiket',
-                    ),
             ),
-          ],
+          ),
         ),
       ),
     );
