@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
+import '../../core/currency_formatter.dart';
 import 'admin_event_drawer_page.dart';
 
 class AdminEventTicketClassesPage extends StatefulWidget {
@@ -60,21 +61,18 @@ class _AdminEventTicketClassesPageState
     return fallback;
   }
 
-  String _formatRupiah(num? amount) {
-    if (amount == null) return 'Rp 0';
+  num? _parseRupiah(String value) {
+    final cleaned = value
+        .toLowerCase()
+        .replaceAll('rp', '')
+        .replaceAll('.', '')
+        .replaceAll(' ', '')
+        .replaceAll(',', '.')
+        .trim();
 
-    final digits = amount.round().toString();
-    final buffer = StringBuffer();
+    if (cleaned.isEmpty) return null;
 
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && (digits.length - i) % 3 == 0) {
-        buffer.write('.');
-      }
-
-      buffer.write(digits[i]);
-    }
-
-    return 'Rp $buffer';
+    return num.tryParse(cleaned);
   }
 
   Future<void> _showClassForm({
@@ -89,7 +87,13 @@ class _AdminEventTicketClassesPageState
     );
 
     final priceController = TextEditingController(
-      text: ticketClass?['price']?.toString() ?? '',
+      text: ticketClass == null
+          ? ''
+          : formatRupiah(
+              num.tryParse(
+                ticketClass['price']?.toString() ?? '',
+              ),
+            ),
     );
 
     final stockController = TextEditingController(
@@ -139,6 +143,7 @@ class _AdminEventTicketClassesPageState
                     'Harga',
                     priceController,
                     number: true,
+                    currency: true,
                   ),
                   const SizedBox(height: 12),
                   _dialogField(
@@ -173,7 +178,7 @@ class _AdminEventTicketClassesPageState
       if (confirmed != true) return;
 
       final name = nameController.text.trim();
-      final price = num.parse(priceController.text.trim());
+      final price = _parseRupiah(priceController.text)!;
       final stock = int.parse(stockController.text.trim());
 
       if (!mounted) return;
@@ -246,6 +251,7 @@ class _AdminEventTicketClassesPageState
     TextEditingController controller, {
     bool number = false,
     bool integerOnly = false,
+    bool currency = false,
   }) {
     return TextFormField(
       controller: controller,
@@ -266,7 +272,9 @@ class _AdminEventTicketClassesPageState
         }
 
         if (number) {
-          final parsed = num.tryParse(value.trim());
+          final parsed = currency
+              ? _parseRupiah(value)
+              : num.tryParse(value.trim());
 
           if (parsed == null) {
             return '$label harus berupa angka.';
@@ -397,7 +405,7 @@ class _AdminEventTicketClassesPageState
       fallback: 'Tanpa nama',
     );
 
-    final price = _formatRupiah(
+    final price = formatRupiah(
       num.tryParse(ticketClass['price']?.toString() ?? ''),
     );
 

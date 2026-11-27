@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../api_service.dart';
 import '../../core/app_theme.dart';
+import '../../core/currency_formatter.dart';
 import 'admin_event_drawer_page.dart';
 import 'admin_event_form_page.dart';
 import 'admin_event_orders_page.dart'; 
@@ -43,23 +44,6 @@ class AdminEventDetailPage extends StatelessWidget {
     return '${date.day.toString().padLeft(2, '0')}/'
         '${date.month.toString().padLeft(2, '0')}/'
         '${date.year}';
-  }
-
-  String _formatRupiah(num? amount) {
-    if (amount == null) return '-';
-
-    final digits = amount.round().toString();
-    final buffer = StringBuffer();
-
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && (digits.length - i) % 3 == 0) {
-        buffer.write('.');
-      }
-
-      buffer.write(digits[i]);
-    }
-
-    return 'Rp $buffer';
   }
 
   String _statusLabel(String status) {
@@ -187,44 +171,26 @@ class AdminEventDetailPage extends StatelessWidget {
     );
   }
 
-  Future<void> _submitDeletion(
+    Future<void> _submitDeletion(
     BuildContext context,
     int eventId,
   ) async {
-    final confirm = await showDialog<bool>(
+    final reason = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Ajukan Penghapusan Event?'),
-        content: const Text(
-          'Permintaan penghapusan akan dikirim kepada Super Admin '
-          'untuk ditinjau. Event tidak langsung dihapus dan '
-          'riwayat transaksi tetap dipertahankan.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, false);
-            },
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, true);
-            },
-            child: const Text('Ajukan'),
-          ),
-        ],
-      ),
+      builder: (_) => const _DeletionRequestDialog(),
     );
 
-    if (confirm != true) return;
+    if (reason == null || reason.trim().isEmpty) return;
 
     try {
-      await ApiService.deleteEvent(eventId);
+      await ApiService.deleteEvent(
+        eventId,
+        reason: reason.trim(),
+      );
 
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Permintaan penghapusan berhasil dikirim.'),
         ),
@@ -234,9 +200,12 @@ class AdminEventDetailPage extends StatelessWidget {
     } catch (e) {
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
-          content: Text('Gagal mengajukan penghapusan: $e'),
+          content: Text(
+            'Gagal mengajukan penghapusan: '
+            '${e.toString().replaceFirst('Exception: ', '')}',
+          ),
         ),
       );
     }
@@ -292,7 +261,7 @@ class AdminEventDetailPage extends StatelessWidget {
       _readValue(['end_date']),
     );
     final description = _readValue(['description']);
-    final price = _formatRupiah(
+    final price = formatRupiah(
       num.tryParse(
         _readValue(['price', 'ticket_price'], fallback: '').trim(),
       ),
@@ -437,6 +406,85 @@ class AdminEventDetailPage extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _DeletionRequestDialog extends StatefulWidget {
+  const _DeletionRequestDialog();
+
+  @override
+  State<_DeletionRequestDialog> createState() => _DeletionRequestDialogState();
+}
+
+class _DeletionRequestDialogState extends State<_DeletionRequestDialog> {
+  final _controller = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Ajukan Penghapusan Event?'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Permintaan penghapusan akan dikirim kepada Super Admin '
+                'untuk ditinjau. Event tidak langsung dihapus dan '
+                'riwayat transaksi tetap dipertahankan.',
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _controller,
+                maxLines: 3,
+                maxLength: 500,
+                decoration: const InputDecoration(
+                  labelText: 'Alasan penghapusan *',
+                  hintText: 'Jelaskan alasan mengapa event ini perlu dihapus...',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  final text = value?.trim() ?? '';
+                  if (text.isEmpty) {
+                    return 'Alasan penghapusan wajib diisi.';
+                  }
+                  if (text.length < 5) {
+                    return 'Alasan minimal 5 karakter.';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.pop(context, _controller.text.trim());
+          },
+          child: const Text('Ajukan'),
+        ),
+      ],
     );
   }
 }
