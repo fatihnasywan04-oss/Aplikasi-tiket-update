@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api_service.dart';
 import '../../core/app_colors.dart';
 import 'admin_drawer_page.dart';
+import 'admin_events_detail_page.dart';
 import 'admin_events_form_page.dart';
 
 class AdminEventsPage extends StatefulWidget {
@@ -310,65 +311,6 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
     }
   }
 
-  Future<void> _delete(Map<String, dynamic> event) async {
-    final id = _toInt(event['id'] ?? event['event_id']);
-
-    if (id == null || id <= 0) {
-      _message('ID event tidak valid.');
-      return;
-    }
-
-    final title = _value(
-      event,
-      ['title', 'name', 'nama_event'],
-      fallback: 'Event ini',
-    );
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text('Apakah kamu yakin ingin menghapus "$title"?\n\n'),
-        content: Text(
-          'Event akan disembunyikan dari publik. Seluruh riwayat pesanan '
-          'dan transaksi yang sudah ada akan tetap tersimpan di sistem. '
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await ApiService.deleteEvent(id);
-
-      if (!mounted) return;
-
-      _message('Permintaan penghapusan event berhasil diproses.');
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-
-      _message(
-        'Gagal menghapus event: '
-        '${e.toString().replaceFirst('Exception: ', '')}',
-      );
-    }
-  }
-
   void _message(String text) {
     if (!mounted) return;
 
@@ -394,7 +336,6 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
   }
 
   Widget _buildEventCard(Map<String, dynamic> event) {
-    final id = _toInt(event['id'] ?? event['event_id']);
     final title = _value(event, ['title', 'name', 'nama_event']);
 
     final location = _value(
@@ -435,166 +376,181 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
           color: AppColors.gold.withValues(alpha: 0.22),
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 88,
-                    height: 104,
-                    child: image.isEmpty
-                        ? _eventImagePlaceholder()
-                        : Image.network(
-                            image,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                _eventImagePlaceholder(),
-                          ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () async {
+          final result = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AdminEventsDetailPage(event: event),
+            ),
+          );
+          if (result == true && mounted) {
+            await _load();
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 88,
+                      height: 104,
+                      child: image.isEmpty
+                          ? _eventImagePlaceholder()
+                          : Image.network(
+                              image,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  _eventImagePlaceholder(),
+                            ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.text,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: statusColor.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        child: Text(
-                          status,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (status == 'Ditolak' &&
-                          rejectionReason.isNotEmpty) ...[
-                        const SizedBox(height: 6),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          'Alasan: $rejectionReason',
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: AppColors.error,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                      if (isCancelled || isDeleted) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          isDeleted
-                              ? 'EVENT DIHAPUS'
-                              : 'EVENT DIBATALKAN',
-                          style: const TextStyle(
-                            color: AppColors.error,
-                            fontSize: 11,
                             fontWeight: FontWeight.bold,
+                            color: AppColors.text,
+                            fontSize: 16,
                           ),
                         ),
-                      ],
-                      const SizedBox(height: 8),
-                      _InfoLine(
-                        icon: Icons.location_on_outlined,
-                        text: location,
-                      ),
-                      const SizedBox(height: 7),
-                      _InfoLine(
-                        icon: Icons.calendar_month_outlined,
-                        text: dateRange,
-                      ),
-                      const SizedBox(height: 9),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.confirmation_number_outlined,
-                            size: 17,
-                            color: AppColors.gold,
+                        const SizedBox(height: 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
                           ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Jangkauan Harga',
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  priceRange,
-                                  style: const TextStyle(
-                                    color: AppColors.gold,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: statusColor.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: Text(
+                            status,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (status == 'Ditolak' &&
+                            rejectionReason.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Alasan: $rejectionReason',
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontSize: 11,
                             ),
                           ),
                         ],
+                        if (isCancelled || isDeleted) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            isDeleted
+                                ? 'EVENT DIHAPUS'
+                                : 'EVENT DIBATALKAN',
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        _InfoLine(
+                          icon: Icons.location_on_outlined,
+                          text: location,
+                        ),
+                        const SizedBox(height: 7),
+                        _InfoLine(
+                          icon: Icons.calendar_month_outlined,
+                          text: dateRange,
+                        ),
+                        const SizedBox(height: 9),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.confirmation_number_outlined,
+                              size: 17,
+                              color: AppColors.gold,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Jangkauan Harga',
+                                    style: TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    priceRange,
+                                    style: const TextStyle(
+                                      color: AppColors.gold,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Divider(
+                height: 26,
+                color: AppColors.border.withValues(alpha: 0.8),
+              ),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.visibility_outlined,
+                    color: AppColors.textMuted,
+                    size: 17,
+                  ),
+                  const SizedBox(width: 7),
+                  const Expanded(
+                    child: Text(
+                      'Lihat detail event',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            Divider(
-              height: 26,
-              color: AppColors.border.withValues(alpha: 0.8),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: id == null || isCancelled || isDeleted
-                        ? null
-                        : () => _openForm(event: event),
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Edit Event'),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: AppColors.gold,
                   ),
-                ),
-                const SizedBox(width: 10),
-                IconButton(
-                  tooltip: 'Hapus event',
-                  onPressed: isDeleted ? null : () => _delete(event),
-                  icon: const Icon(
-                    Icons.delete_outline_rounded,
-                    color: AppColors.error,
-                  ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
